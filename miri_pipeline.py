@@ -216,11 +216,21 @@ DATA_STAGES = [
     'stage6_background',
 ]
 
-FLAT_DATA_PATH = file_paths.saturn(
-    'flat_field',
-    'merged',
+# Get a useful default flat data path that works natively on Leicester's ALICE HPC
+_saturn_flat_path = os.path.join(
+    'MIRI_IFU/Saturn_2022nov13/flat_field/merged',
     'ch{channel}-{band}_constructed_flat{fringe}.fits',
 )
+_path_options = [
+    os.path.join('/data/nemesis/jwst', _saturn_flat_path),
+    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', _saturn_flat_path),
+    os.path.join(os.path.dirname(__file__), 'flat_field'),
+]
+DEFAULT_FLAT_DATA_PATH = _path_options[-1]
+for _p in _path_options:
+    if os.path.exists(os.path.dirname(_p)):
+        DEFAULT_FLAT_DATA_PATH = os.path.normpath(_p)
+        break
 
 # Arguments to format the paths above
 CHANNELS = ['1', '2', '3', '4']
@@ -262,7 +272,7 @@ def run_pipeline(
     background_path: str | None = None,
     ndither: int = 4,
     parallel: float | bool = False,
-    flat_data_path: str = FLAT_DATA_PATH,
+    flat_data_path: str = DEFAULT_FLAT_DATA_PATH,
     basic_navigation: bool = False,
     skip_steps: list[STEP] | set[STEP] | None = None,
     start_step: STEP | None = None,
@@ -460,8 +470,8 @@ def run_pipeline(
         files = sorted(glob.glob(os.path.join(root_path, 'stage0', f'*.fits')))
         # Allow customisation of remove_groups() groups_to_use argument with kwargs
         kw = {**dict(groups_to_use=groups_to_use), **(desaturation_kwargs or {})}
-        for p in tqdm.tqdm(files, desc='Removing groups'):
-            remove_groups.remove_groups_from_file(p, **kw)
+        for _p in tqdm.tqdm(files, desc='Removing groups'):
+            remove_groups.remove_groups_from_file(_p, **kw)
         log('Remove groups step complete\n')
 
     # Create list of paths to reduce (both 'main' dataset and reduced groups)
@@ -473,23 +483,23 @@ def run_pipeline(
         reduceed_group_root_paths = sorted(
             glob.glob(os.path.join(root_path, 'groups', '*_groups')),
             reverse=True,
-            key=lambda p: int(os.path.basename(p).split('_')[0]),
+            key=lambda _p: int(os.path.basename(_p).split('_')[0]),
         )
         if groups_to_use is not None:
             reduceed_group_root_paths = [
-                p
-                for p in reduceed_group_root_paths
-                if int(os.path.basename(p).split('_')[0]) in groups_to_use
+                _p
+                for _p in reduceed_group_root_paths
+                if int(os.path.basename(_p).split('_')[0]) in groups_to_use
             ]
         group_root_paths.extend(reduceed_group_root_paths)
 
     if 'reduce' not in skip_steps:
         log('Reducing data...')
-        for p in group_root_paths:
+        for _p in group_root_paths:
             # Allow customisation of reduction parallel kw with reduction_kwargs
             kw = {**dict(parallel=parallel), **(reduction_kwargs or {})}
             reduce_jwst.JWSTReduction(
-                p,
+                _p,
                 defringe=defringe,
                 _run_immediately=True,
                 **kw,
@@ -499,11 +509,11 @@ def run_pipeline(
     if 'navigate' not in skip_steps:
         log('Navigating data...')
         paths_to_navigate = []
-        for p in group_root_paths:
+        for _p in group_root_paths:
             paths_to_navigate.extend(
-                get_stage_paths(p, PATH_STAGE3_RAW, defringe, ndither)
+                get_stage_paths(_p, PATH_STAGE3_RAW, defringe, ndither)
             )
-        paths_to_navigate = [p for p in paths_to_navigate if os.path.exists(p)]
+        paths_to_navigate = [_p for _p in paths_to_navigate if os.path.exists(_p)]
         navigate_jwst_observations.load_kernels()
         navigate_jwst_observations.navigate_multiple(
             *paths_to_navigate, basic=basic_navigation, **navigation_kwargs or {}
@@ -513,8 +523,8 @@ def run_pipeline(
     if desaturate and 'desaturate' not in skip_steps:
         log('Desaturating data...')
         paths_in_list = [
-            get_stage_paths(p, PATH_NAVIGATED, defringe, ndither)
-            for p in group_root_paths
+            get_stage_paths(_p, PATH_NAVIGATED, defringe, ndither)
+            for _p in group_root_paths
         ]
         paths_out = get_stage_paths(root_path, PATH_DESATURATED, defringe, ndither)
         args_list = []
@@ -600,13 +610,13 @@ def run_pipeline(
             template_in = PATH_DATA.format_map(KeepMissingDict(stage=stage))
             template_out = PATH_PLOT.format_map(KeepMissingDict(stage=stage))
             paths = []
-            for p in group_root_paths:
+            for _p in group_root_paths:
                 paths.extend(
                     [
                         (p_in, p_out)
                         for p_in, p_out in zip(
-                            get_stage_paths(p, template_in, defringe, ndither),
-                            get_stage_paths(p, template_out, defringe, ndither),
+                            get_stage_paths(_p, template_in, defringe, ndither),
+                            get_stage_paths(_p, template_out, defringe, ndither),
                         )
                         if os.path.exists(p_in)
                     ]
