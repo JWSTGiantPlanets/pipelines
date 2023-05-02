@@ -18,6 +18,7 @@ import re
 P = ParamSpec('P')
 T = TypeVar('T')
 
+
 # Warnings
 class ignore_warnings(warnings.catch_warnings):
     """

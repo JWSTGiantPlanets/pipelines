@@ -299,7 +299,6 @@ class SolarSystemBodyNavigator(NavigatorBase):
         self.flattening = (self.radii[0] - self.radii[2]) / self.radii[0]
 
     def target_location(self):
-
         # Get the position of the target relative to the obervatory
         self.pos_target, self.light_time = spice.spkpos(
             self.target, self.et, self.iref, self.abcorr, self.observatory
@@ -414,7 +413,6 @@ class SolarSystemBodyNavigator(NavigatorBase):
             intercept = False
 
         if intercept:
-
             # Get some angles
             ret['phase'], ret['incidence'], ret['emission'] = spice.illum(
                 self.target, self.et, self.abcorr, self.observatory, point

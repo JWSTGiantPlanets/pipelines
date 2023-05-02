@@ -103,7 +103,6 @@ def calculate_corresponding_pixels(
     bin_aspect: float,
     emission_cutoff: float,
 ) -> CorrespondingPixels:
-
     lat_images = [lat_img for lon_img, lat_img, emission_img in coord_images]
     lat_diff = (
         np.nanmedian(np.diff(lat_images, axis=1)) ** 2
