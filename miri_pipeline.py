@@ -171,7 +171,6 @@ import tqdm
 import background_subtraction
 import desaturate_data
 import despike_data
-import file_paths
 import flat_field
 import jwst_summary_animation
 import jwst_summary_plots
