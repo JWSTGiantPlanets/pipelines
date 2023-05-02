@@ -1,0 +1,16 @@
+# Ignore everything...
+*
+!**/
+
+# ... except useful filetypes...
+!*.py
+!*.md
+!*.sh
+!*.cfg
+!*.yml
+!*.toml
+
+# ... and keep useful files...
+!.gitignore
+!.gitattributes
+!requirements.txt
