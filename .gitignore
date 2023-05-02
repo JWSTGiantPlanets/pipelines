@@ -8,6 +8,7 @@
 !*.sh
 !*.cfg
 !*.yml
+!*.toml
 
 # ... and keep useful files...
 !.gitignore
