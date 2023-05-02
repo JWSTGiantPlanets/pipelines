@@ -1,8 +1,7 @@
 # pipelines
 
 ## TODO
-- [ ] Add requirements.txt
-- [ ] Copy MIRI pipeline over
-- [ ] Copy flat generation over
-    - [ ] Copy reference flats over?
+- [x] Add requirements.txt
+- [x] Copy MIRI pipeline over
+- [x] Copy flat generation over
 - [ ] Add useful README

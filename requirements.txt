@@ -1,0 +1,7 @@
+astropy
+matplotlib
+numpy
+spiceypy
+scipy
+tqdm
+planetmapper
