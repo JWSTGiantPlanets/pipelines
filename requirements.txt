@@ -5,3 +5,4 @@ spiceypy
 scipy
 tqdm
 planetmapper
+jwst
