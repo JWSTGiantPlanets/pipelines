@@ -6,6 +6,7 @@ import tools
 
 GENERATION_HEADER_PREFIX = 'FLAT GENERATION'
 
+
 def apply_flat(
     path_in: str,
     path_out: str,

@@ -134,7 +134,7 @@ def save_grouped_data(
     data: list[dict],
     wavelengths: np.ndarray,
     path: str,
-    ctype:str
+    ctype: str,
 ):
     max_points = max(len(d['SCI']) for d in data)
 
@@ -273,4 +273,4 @@ def miri_channel_data_from_header(
     """
     Get the channel and band from a FITS header.
     """
-    return header['CHANNEL'].casefold(), header['BAND'].casefold() 
+    return header['CHANNEL'].casefold(), header['BAND'].casefold()

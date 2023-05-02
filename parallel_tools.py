@@ -35,7 +35,7 @@ def runmany(
             calculate based on `parallel_frac`.
         parallel_frac: Fraction of processors to use if `num_processors` is `None`. Set
             to `False` to run serially (i.e. completely avoid using parallel
-            processing). Note that if running serially, then the `timeout` and 
+            processing). Note that if running serially, then the `timeout` and
             `start_delay` arguments are ignored.
         timeout: Average timeout for each job in seconds. If `None`, will not timeout.
             This timeout is performed on the entire batch of jobs, so long jobs run at
@@ -81,7 +81,7 @@ def runmany(
                 )
                 if start_delay:
                     time.sleep(start_delay)
-            
+
             to_retry = wait_for_jobs(
                 jobs, timeout=timeout, catch_errors=retry_parallel_errors
             )
@@ -92,7 +92,7 @@ def runmany(
             for a in args_list_retry:
                 parallel_job(a, catch_errors=False)
             log(f'Completed {len(args_list_retry)} rerunning jobs serially')
-        
+
         dtm_end = datetime.datetime.now()
         log(f'Completed {len(args_list)} jobs in {dtm_end - dtm_start}')
 

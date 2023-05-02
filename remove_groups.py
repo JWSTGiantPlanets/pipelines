@@ -4,6 +4,7 @@ from astropy.io import fits
 import numpy as np
 import tools
 
+
 def remove_groups_from_file(path: str, groups_to_use: list[int] | None = None) -> None:
     with fits.open(path) as hdul:
         ngroups_full = hdul[0].header['NGROUPS']  #  type: ignore
@@ -32,4 +33,3 @@ def remove_groups_from_file(path: str, groups_to_use: list[int] | None = None) -
             )
             tools.check_path(path_out)
             hdul.writeto(path_out, overwrite=True)
-
