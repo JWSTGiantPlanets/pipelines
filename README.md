@@ -55,7 +55,7 @@ download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites
 
 
 ## MIRI MRS pipeline
-The [`miri_pipeline`](https://github.com/ortk95/jwst-pipelines/blob/main/miri_pipeline.py) script is used to reduce and process MIRI MRS observations of solar system targets. The full custom pipeline includes:
+The [`miri_pipeline.py`](https://github.com/ortk95/jwst-pipelines/blob/main/miri_pipeline.py) script is used to reduce and process MIRI MRS observations of solar system targets. The full custom pipeline includes:
 1. The [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) is used to reduce `stage0` uncalibrated data into `stage3` calibrated data cubes. This keeps individual dithers separate to avoid introducing artefacts from any dither combination process.
 2. Each reduced cube is navigated, and backplanes are created to provide useful coordinates (e.g. latitude, longitude, emission angle, RA, Dec etc.) for each pixel.
 3. Saturated parts of the cubes are identified and desaturated where possible using data reduced using fewer groups.
