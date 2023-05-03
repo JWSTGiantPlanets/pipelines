@@ -10,6 +10,7 @@
 !*.yml
 !*.toml
 !*.cfg
+!*.png
 
 # ... and keep useful files...
 !.gitignore

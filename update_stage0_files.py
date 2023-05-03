@@ -13,6 +13,7 @@ MAST_URL = (
     'https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/{filename}'
 )
 
+
 def main(*args: str) -> None:
     for directory in args:
         update_directory(directory)
@@ -30,6 +31,7 @@ def update_directory(directory_path: str, **kw) -> None:
     for file in files:
         update_file(file, **kw)
     print(f'Successfully updated {len(files)} files in {directory_path}.')
+
 
 def update_file(path: str, remove_old: bool = True) -> None:
     """
