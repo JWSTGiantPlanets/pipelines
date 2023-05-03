@@ -1,5 +1,5 @@
 # JWST custom reduction pipelines
-**[Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSPEC Pipeline](#nirspec-pipeline) | [Support](#support) | [Reference](#reference)**
+**[Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSPEC Pipeline](#nirspec-pipeline) | [Support](#support) | [References](#references)**
 
 The reduction and visualisation code in this repository is used to call and extend the [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) to process, reduce and analyse NIRSPEC and MIRI data for solar system observations.
 
@@ -70,7 +70,7 @@ First download the `stage0` data from the [MAST archive](https://mast.stsci.edu/
 1. Search for the observations you are interested in, then add them to the download basket
 2. Open the download basket
 3. Uncheck the `Minimum Recommend Products` box on the left
-4. Ceck the `SCIENCE` box in the 'Product Category' section and the `UNCAL` box in the 'Group' section
+4. Check the `SCIENCE` box in the 'Product Category' section and the `UNCAL` box in the 'Group' section
 5. Select the files you want to download in 'Files' section in the middle of the screen
 6. Download the data to a local directory e.g. `/path/to/your/miri/data/stage0`
 
@@ -100,13 +100,13 @@ Our testing suggests that the flat field appears to be slightly different for di
 You can create flat fields yourself using the [`construct_flat_field`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/construct_flat_field.py) script to create a set fo flat fields directly from your dataset. The script takes a set of `stage3` or `stage3_desaturated` dithered observations and uses these to construct a flat field which minimises variation in brightness of each location on the target between dithers. This was designed to work for extended source observations which fill the MIRI field of view and have at least 4 dithers. Observations of objects which do not fill the FOV or have fewer dithers are unlikely to produce reliable flat fields.
 
 ## NIRSPEC pipeline
-_The NIRSPEC pipeline is in development and will be released soon..._
+_The custom NIRSPEC pipeline is in development and will be released soon..._
 
 
 ## Support
 If you have any issues running the code in this repository, please [open an issue](https://github.com/JWSTGiantPlanets/pipelines/issues/new) or contact ortk2@leicester.ac.uk.
 
-## Reference
+## References
 Fletcher et al. (2023). _Saturn's Atmosphere in Northern Summer Revealed by JWST/MIRI_. Manuscript in preparation.
 
 ![MIRI pipeline summary figure](images/pipeline_summary.png)
