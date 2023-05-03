@@ -175,7 +175,7 @@ import flat_field
 import jwst_summary_animation
 import jwst_summary_plots
 import navigate_jwst_observations
-import reduce_jwst
+import reduce_jwst_miri
 import remove_groups
 import tools
 from parallel_tools import runmany
@@ -497,7 +497,7 @@ def run_pipeline(
         for _p in group_root_paths:
             # Allow customisation of reduction parallel kw with reduction_kwargs
             kw = {**dict(parallel=parallel), **(reduction_kwargs or {})}
-            reduce_jwst.JWSTReduction(
+            reduce_jwst_miri.JWSTReduction(
                 _p,
                 defringe=defringe,
                 _run_immediately=True,
