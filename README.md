@@ -6,7 +6,7 @@ The reduction and visualisation code in this repository is used to call and exte
 ## Setup
 Requirements:
 - Python 3.10 or above
-- ~10GB of disk space (for the CRDS cache files downloaded when running the JWST data reduction)
+- ~10GB of disk space (for SPICE kernels and the CRDS cache files downloaded when running the JWST data reduction)
 
 To run the pipelines yourself, first create a local clone of this repository with:
 ```bash
