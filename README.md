@@ -25,11 +25,33 @@ export CRDS_PATH="path/to/crds_cache"
 export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
 ```
 
-The navigation and visualisation pipeline steps use SPICE kernels to calculate the observation geometry. The location that the pipeline looks for the kernels can be set with the `PLANETMAPPER_KERNEL_PATH` environment variable:
+The navigation and visualisation pipeline steps use SPICE kernels to calculate the observation geometry. The location that the pipeline looks for the kernels can be set with the `PLANETMAPPER_KERNEL_PATH` environment variable. These can be set in your `.bashrc` file with:
 ```bash
 export PLANETMAPPER_KERNEL_PATH="path/to/spice_kernels"
 ```
-If you don't already have the SPICE kernels downloaded, you will need to download the appropriate set of kernels for your targets and for JWST. For information on downloading and saving the SPICE kernels, see https://planetmapper.readthedocs.io/en/latest/spice_kernels.html.
+If you don't already have the SPICE kernels downloaded, you will need to download the appropriate set of kernels for your targets and for JWST from the [NAIF archive](https://naif.jpl.nasa.gov/pub/naif/). For information on downloading and saving the SPICE kernels, see the [SPICE kernel documentation for the PlanetMapper module](https://planetmapper.readthedocs.io/en/latest/spice_kernels.html). For example, to download the required kernels for a JWST observation of jupiter, you can run the following in Python:
+
+```python
+from planetmapper.kernel_downloader import download_urls
+# Ensure you have set the PLANETMAPPER_KERNEL_PATH environment variable before running 
+# these commands (otherwise the kernels will be downloaded to the wrong location)
+
+# Standard kernels
+download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/')
+download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/')
+
+# JWST kernels
+download_urls('https://naif.jpl.nasa.gov/pub/naif/HST/kernels/spk/')
+
+# Locations of planetary system barycentres:
+download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de430.bsp')
+
+# Locations of Jupiter (& its major satellites)
+# THE URL WILL BE DIFFERENT FOR OTHER TARGETS...
+download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/jup365.bsp')
+
+# Note, the exact URLs in this example may not work if new kernel versions are published
+```
 
 
 ## MIRI MRS pipeline
@@ -37,7 +59,7 @@ The [`miri_pipeline`](https://github.com/ortk95/jwst-pipelines/blob/main/miri_pi
 1. The [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) is used to reduce `stage0` uncalibrated data into `stage3` calibrated data cubes. This keeps individual dithers separate to avoid introducing artefacts from any dither combination process.
 2. Each reduced cube is navigated, and backplanes are created to provide useful coordinates (e.g. latitude, longitude, emission angle, RA, Dec etc.) for each pixel.
 3. Saturated parts of the cubes are identified and desaturated where possible using data reduced using fewer groups.
-4. Flat field effects (e.g. striping and swirling patterns) in the data can be corrected using synthetic flat fields generated from dithered observations. To use these, see the [flat field](#flat-fields) section below.
+4. Flat field effects (e.g. striping and swirling patterns) in the data can be corrected using synthetic flat fields generated from dithered observations. To use these, see the [flat field](#miri-flat-fields) section below.
 5. Extreme outlier pixels are identified and flagged and removed from the data. Note that for small objects or point source observations, this `despike` step may be overaggressive and remove real data.
 6. Quick look plots and animations are generated for each cube.
 
@@ -51,7 +73,7 @@ First download the `stage0` data from the [MAST archive](https://mast.stsci.edu/
 4. Select the files you want to download in 'Files' section
 5. Download your data to a local directory e.g. `/path/to/your/miri/data/stage0`
 
-If you want to apply the flat field corrections to your data, you will need to download (or construct) a set of synthetic flat fields. See the [flat field](#flat-fields) section below for more details about getting the flats. If you don't want to flat field correct your data, you can run the pipeline with the `--skip_steps flat` argument.
+If you want to apply the flat field corrections to your data, you will need to download (or construct) a set of synthetic flat fields. See the [flat field](#miri-flat-fields) section below for more details about getting the flats. If you don't want to flat field correct your data, you can run the pipeline with the `--skip_steps flat` argument.
 
 Once you have downloaded the data and downloaded any required flat fields, you can run the full pipeline with:
 
@@ -67,7 +89,7 @@ python3 /path/to/pipelines/miri_pipeline.py /path/to/your/miri/data
 For more detailed documentation, including the various customisation options, see the instructions at the top of the [`miri_pipeline.py`](https://github.com/ortk95/jwst-pipelines/blob/main/miri_pipeline.py) file or run `python3 miri_pipeline.py --help`.
 
 
-### Flat fields
+### MIRI flat fields
 Synthetic flat fields derived from the observations of Saturn in November 2022 can be downloaded from the [supplementary material for Fletcher et al. (2023)](https://github.com/JWSTGiantPlanets/saturn-atmosphere-miri). Flats in the `pipelines/flat_field` directory will be automatically used by the pipeline if they are present, or you can manually specify the path of the flat fields with the `flat_data_path` argument when running the MIRI pipeline.
 
 The Saturn observations have poor SNR at some wavelengths (particularly in channel 1B) which reduces the quality of the flats at some wavelengths. This means that data corrected with the Saturn flats will have increased noise at the wavelengths where there was poor SNR in the original Saturn observations.
