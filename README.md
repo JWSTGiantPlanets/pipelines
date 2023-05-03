@@ -69,13 +69,14 @@ This pipeline is described in Fletcher et al. (2023).
 First download the `stage0` data from the [MAST archive](https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html):
 1. Search for the observations you are interested in, then add them to the download basket
 2. Open the download basket
-3. Uncheck the `Minimum Recommend Products` box on the left, then check the `SCIENCE` box in the 'Product Category' section and the `UNCAL` box in the 'Group' section
-4. Select the files you want to download in 'Files' section
-5. Download your data to a local directory e.g. `/path/to/your/miri/data/stage0`
+3. Uncheck the `Minimum Recommend Products` box on the left
+4. Ceck the `SCIENCE` box in the 'Product Category' section and the `UNCAL` box in the 'Group' section
+5. Select the files you want to download in 'Files' section in the middle of the screen
+6. Download the data to a local directory e.g. `/path/to/your/miri/data/stage0`
 
 If you want to apply the flat field corrections to your data, you will need to download (or construct) a set of synthetic flat fields. See the [flat field](#miri-flat-fields) section below for more details about getting the flats. If you don't want to flat field correct your data, you can run the pipeline with the `--skip_steps flat` argument.
 
-Once you have downloaded the data and downloaded any required flat fields, you can run the full pipeline with:
+Once you have downloaded the `stage0` data and downloaded any required flat fields, you can run the full pipeline with:
 
 ```bash
 python3 miri_pipeline.py /path/to/your/miri/data
