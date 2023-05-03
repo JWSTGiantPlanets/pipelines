@@ -30,4 +30,4 @@ _The NIRSPEC pipeline is in development and will be released soon..._
 
 
 ## Reference
-> Fletcher et al. (2023). _Saturn's Atmosphere in Northern Summer Revealed by JWST/MIRI_. Manuscript in preparation.
+Fletcher et al. (2023). _Saturn's Atmosphere in Northern Summer Revealed by JWST/MIRI_. Manuscript in preparation.
