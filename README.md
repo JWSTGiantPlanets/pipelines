@@ -3,26 +3,31 @@ The reduction and visualisation code in this repository is used to call and exte
 
 
 ## Setup
+Requirements:
+- Python 3.10 or above
+- ~10GB of disk space (for the CRDS cache files downloaded when running the JWST data reduction)
+
 To run the pipelines yourself, first create a local clone of this repository with:
 ```
 git clone https://github.com/JWSTGiantPlanets/pipelines.git
 ```
 
-Then the required Python modules can then be installed with:
+Then install the required Python modules with:
 
 ```
 cd pipelines
 pip install -r requirements.txt
 ```
 
-Note that these pipelines require Python 3.10 or above. 
+## MIRI MRS pipeline
 
+TODO 
 
-## MIRI pipeline
-
-TODO
+TODO mention getting flat fields
 
 ## NIRSPEC pipeline
-_The NIRSPEC pipeline is currently in development and will be released soon._
+_The NIRSPEC pipeline is in development and will be released soon..._
 
 
+## Reference
+> Fletcher et al. (2023). _Saturn's Atmosphere in Northern Summer Revealed by JWST/MIRI_. Manuscript in preparation.
