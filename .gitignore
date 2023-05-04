@@ -16,3 +16,6 @@
 !.gitignore
 !.gitattributes
 !requirements.txt
+
+# ... and ignore files related to development etc. ...
+*scratchpad.py
