@@ -23,7 +23,7 @@ import tqdm
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline
 
 from parallel_tools import runmany
-from tools import KeepMissingDict, log
+from tools import KeepMissingDict, check_path, log
 
 # Central record of the filepaths for the various steps of the reduction pipeline
 
@@ -138,6 +138,7 @@ def run_pipeline(
         paths_in = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
         output_dir = os.path.join(root_path, 'stage1')
         args_list = [(p, output_dir, stage1_kwargs or {}) for p in paths_in]
+        check_path(output_dir)
 
         log(f'Processing {len(args_list)} files...')
         runmany(
@@ -153,6 +154,7 @@ def run_pipeline(
         paths_in = sorted(glob.glob(os.path.join(root_path, 'stage1', '*.fits')))
         output_dir = os.path.join(root_path, 'stage2')
         args_list = [(p, output_dir, stage2_kwargs or {}) for p in paths_in]
+        check_path(output_dir)
 
         log(f'Processing {len(args_list)} files...')
         runmany(
