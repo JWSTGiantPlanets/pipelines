@@ -34,7 +34,6 @@ import tools
 from parallel_tools import runmany
 from tools import KeepMissingDict
 
-
 STEP: TypeAlias = Literal[
     'remove_groups',
     'reduce',

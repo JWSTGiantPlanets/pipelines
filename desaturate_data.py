@@ -1,13 +1,14 @@
 """
 Script to desaturate data. See desaturate_saturn.py for an example of using this.
 """
-from astropy.io import fits
-import tools
-import numpy as np
 import itertools
 import math
+
+import numpy as np
+from astropy.io import fits
 from scipy.ndimage import maximum_filter
 
+import tools
 
 EXPAND_WINDOW_SPECTRAL = 2
 EXPAND_WINDOW_SPATIAL = 0

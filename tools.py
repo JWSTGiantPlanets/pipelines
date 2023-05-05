@@ -1,19 +1,21 @@
 """General useful tools"""
-import numpy as np
+import datetime
+import hashlib
+import itertools
+import math
 import os
 import pathlib
-from typing import Callable, ParamSpec, TypeVar, Any
-import function_cache
-import hashlib
 import pickle
-import warnings
-from astropy.io import fits
-import astropy.units as u
-import math
-import datetime
-import itertools
-import subprocess
 import re
+import subprocess
+import warnings
+from typing import Any, Callable, ParamSpec, TypeVar
+
+import astropy.units as u
+import numpy as np
+from astropy.io import fits
+
+import function_cache
 
 P = ParamSpec('P')
 T = TypeVar('T')

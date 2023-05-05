@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from astropy.io import fits
-import numpy as np
-import tools
 import os
+
+import numpy as np
+from astropy.io import fits
+
+import tools
 
 
 def subtract_background(

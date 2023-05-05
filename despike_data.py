@@ -1,9 +1,10 @@
-import tools
-import numpy as np
 import matplotlib.pyplot as plt
-from astropy.io import fits
+import numpy as np
 import tqdm
+from astropy.io import fits
+
 import image_filters
+import tools
 
 
 def despike_cube(

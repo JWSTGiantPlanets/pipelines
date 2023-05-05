@@ -34,6 +34,7 @@ import argparse
 import os
 import sys
 from typing import Literal
+
 import matplotlib.animation as mpanim
 import matplotlib.pyplot as plt
 import matplotlib.style as mstyle
@@ -42,6 +43,7 @@ import planetmapper
 import tqdm
 from astropy.io import fits
 from matplotlib.cm import ScalarMappable
+
 import tools
 import zonal_average
 

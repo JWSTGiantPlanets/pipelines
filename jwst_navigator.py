@@ -1,11 +1,12 @@
 """
 Based on Henrik's JWSTSolarSystemPointing
 """
-import numpy as np
-from jwst import datamodels
-from astropy.io import fits
-import spiceypy as spice
 import logging
+
+import numpy as np
+import spiceypy as spice
+from astropy.io import fits
+from jwst import datamodels
 
 
 class NavigatorBase:
