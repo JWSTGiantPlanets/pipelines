@@ -177,9 +177,8 @@ import jwst_summary_plots
 import navigate_jwst_observations
 import reduce_jwst_miri
 import remove_groups
-import tools
 from parallel_tools import runmany
-from tools import KeepMissingDict
+from tools import KeepMissingDict, all_combinations, log
 
 # Central record of the filepaths for various steps of the reduction pipeline
 PATH_FITS = os.path.join(
@@ -713,7 +712,7 @@ def get_stage_paths(
     dithers = [str(i + 1) for i in range(ndither)]
 
     paths = []
-    for path_kw in tools.all_combinations(
+    for path_kw in all_combinations(
         dither=dithers,
         channel=CHANNELS,
         band=BANDS,
@@ -721,18 +720,6 @@ def get_stage_paths(
         path_kw['abc'] = CHANNEL_LENGTH_ALIASES[path_kw['band']]
         paths.append(template.format(fringe=fringe, **path_kw))
     return paths
-
-
-def log(*messages: Any, time: bool = True) -> None:
-    """
-    Print a message with a timestamp.
-
-    Args:
-        *messages: Messages passed to `print()`.
-        time: Toggle showing the timestamp.
-    """
-    prefix = datetime.datetime.now().strftime('%H:%M:%S') if time else ' ' * 8
-    print(prefix, *messages, flush=True)
 
 
 def main():
