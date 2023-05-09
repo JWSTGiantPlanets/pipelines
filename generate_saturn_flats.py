@@ -43,17 +43,17 @@ def main():
         do_channel(**kwargs)
 
 
-def do_channel(channel: str, band: str, fringe: str):
+def do_channel(channel_number: str, channel_band: str, fringe: str):
     try:
         for tile in tqdm.tqdm(
             TILES,
-            desc=f'Creating {channel}-{band}{fringe} flats',
+            desc=f'Creating {channel_number}-{channel_band}{fringe} flats',
             leave=False,
         ):
-            do_tile(channel, band, fringe, tile)
-        merge_flats(channel, band, fringe)
+            do_tile(channel_number, channel_band, fringe, tile)
+        merge_flats(channel_number, channel_band, fringe)
     except FileNotFoundError:
-        print(f'No data found for ch{channel}-{band}{fringe}')
+        print(f'No data found for ch{channel_number}-{channel_band}{fringe}')
 
 
 def do_tile(channel_number: str, channel_band: str, fringe: str, dataset: str):
