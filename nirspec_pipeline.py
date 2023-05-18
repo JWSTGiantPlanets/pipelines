@@ -4,7 +4,8 @@
 NIRSPEC pipeline
 
 TODO
-- Reduction stages 1-3
+- Remove groups (optional)
+- Reduction stages 3
 - Navigate
 - Desaturation (optional)
 - Despike
