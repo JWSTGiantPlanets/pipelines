@@ -13,18 +13,14 @@ TODO
 - Animate
 - Add note about chmodding all the touched files
 """
-import argparse
-import datetime
 import glob
-import json
 import os
 from typing import Any, Literal, TypeAlias
 
-import tqdm
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline
 
 from parallel_tools import runmany
-from tools import KeepMissingDict, check_path, log
+from tools import check_path, log
 
 # Central record of the filepaths for the various steps of the reduction pipeline
 
