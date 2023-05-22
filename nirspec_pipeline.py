@@ -17,7 +17,10 @@ import glob
 import os
 from typing import Any, Literal, TypeAlias
 
-from jwst.pipeline import Detector1Pipeline, Spec2Pipeline
+from astropy.io import fits
+from jwst.associations.asn_from_list import asn_from_list
+from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
+from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
 
 from parallel_tools import runmany
 from tools import check_path, log
@@ -54,8 +57,6 @@ def run_pipeline(
     *,
     desaturate: bool = True,
     groups_to_use: list[int] | None = None,
-    background_path: str | None = None,
-    ndither: int = 4,
     parallel: float | bool = False,
     basic_navigation: bool = False,
     skip_steps: list[STEP] | set[STEP] | None = None,
@@ -106,8 +107,6 @@ def run_pipeline(
 
     # Standardise file paths
     root_path = os.path.expandvars(os.path.expanduser(root_path))
-    if background_path is not None:
-        background_path = os.path.expandvars(os.path.expanduser(background_path))
 
     log(f'Running MIRI pipeline')
     log(f'Root path: {root_path!r}', time=False)
@@ -123,41 +122,50 @@ def run_pipeline(
         log(f'Groups to keep: {groups_to_use!r}', time=False)
     if basic_navigation:
         log(f'Basic navigation: {basic_navigation!r}', time=False)
-    log(f'Number of dithers: {ndither!r}', time=False)
     print()
 
     # Run pipeline steps...
 
-    # TODO desaturation stuff
+    # TODO desaturation: remove groups
+    # TODO desaturation: loop through stages1-3 with removed groups
 
     if 'stage1' not in skip_steps:
-        log('Running reduction stage 1')
-        paths_in = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
-        output_dir = os.path.join(root_path, 'stage1')
-        args_list = [(p, output_dir, stage1_kwargs or {}) for p in paths_in]
-        check_path(output_dir)
-
-        log(f'Processing {len(args_list)} files...')
-        runmany(
-            reduction_detector1_fn,
-            args_list,
-            desc='stage1',
-            **reduction_parallel_kwargs,
-        )
-        log('Reduction stage 1 step complete\n')
+        run_stage1(root_path, stage1_kwargs, reduction_parallel_kwargs)
 
     if 'stage2' not in skip_steps:
-        log('Running reduction stage 2')
-        paths_in = sorted(glob.glob(os.path.join(root_path, 'stage1', '*.fits')))
-        output_dir = os.path.join(root_path, 'stage2')
-        args_list = [(p, output_dir, stage2_kwargs or {}) for p in paths_in]
-        check_path(output_dir)
+        run_stage2(root_path, stage2_kwargs, reduction_parallel_kwargs)
 
-        log(f'Processing {len(args_list)} files...')
-        runmany(
-            reduction_spec2_fn, args_list, desc='stage2', **reduction_parallel_kwargs
-        )
-        log('Reduction stage 2 step complete\n')
+    if 'stage3' not in skip_steps:
+        run_stage3(root_path, stage3_kwargs, reduction_parallel_kwargs)
+
+    # TODO stage3
+    # TODO desaturation: combine removed groups data
+    # TODO navigate
+    # TODO despike
+    # TODO plot
+    # TODO animate
+
+
+# stage1
+def run_stage1(
+    root_path: str,
+    stage1_kwargs: dict[str, Any] | None = None,
+    reduction_parallel_kwargs: dict[str, Any] | None = None,
+):
+    log('Running reduction stage 1')
+    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
+    output_dir = os.path.join(root_path, 'stage1')
+    args_list = [(p, output_dir, stage1_kwargs or {}) for p in paths_in]
+    check_path(output_dir)
+
+    log(f'Processing {len(args_list)} files...')
+    runmany(
+        reduction_detector1_fn,
+        args_list,
+        desc='stage1',
+        **reduction_parallel_kwargs or {},
+    )
+    log('Reduction stage 1 step complete\n')
 
 
 def reduction_detector1_fn(args: tuple[str, str, dict[str, Any]]) -> None:
@@ -165,13 +173,78 @@ def reduction_detector1_fn(args: tuple[str, str, dict[str, Any]]) -> None:
     Detector1Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
 
 
+# stage2
+def run_stage2(
+    root_path: str,
+    stage2_kwargs: dict[str, Any] | None = None,
+    reduction_parallel_kwargs: dict[str, Any] | None = None,
+):
+    log('Running reduction stage 2')
+    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage1', '*.fits')))
+    output_dir = os.path.join(root_path, 'stage2')
+    args_list = [(p, output_dir, stage2_kwargs or {}) for p in paths_in]
+    check_path(output_dir)
+
+    log(f'Processing {len(args_list)} files...')
+    runmany(
+        reduction_spec2_fn, args_list, desc='stage2', **reduction_parallel_kwargs or {}
+    )
+    log('Reduction stage 2 step complete\n')
+
+
 def reduction_spec2_fn(args: tuple[str, str, dict[str, Any]]) -> None:
     path_in, output_dir, kwargs = args
     Spec2Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
 
 
-def reduction_spec3_fn(path_in: str) -> None:
-    pass
+# stage3
+def run_stage3(
+    root_path: str,
+    stage3_kwargs: dict[str, Any] | None = None,
+    reduction_parallel_kwargs: dict[str, Any] | None = None,
+):
+    log('Running reduction stage 3')
+    dither_sorted_files: dict[int, list[str]] = sort_stage2_files_for_stage3(root_path)
+    for dither, paths_in in dither_sorted_files.items():
+        log(
+            f'Processing dither {dither}/{len(dither_sorted_files)} ({len(paths_in)} files)...'
+        )
+        output_dir = os.path.join(root_path, 'stage3', f'd{dither}')
+        check_path(output_dir)
+
+
+def sort_stage2_files_for_stage3(root_path: str) -> dict[int, list[str]]:
+    out: dict[int, list[str]] = {}
+    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage2', '*_cal.fits')))
+    for p in paths_in:
+        with fits.open(p) as hdul:
+            hdr = hdul[0].header  #  type: ignore
+        dither = int(hdr['PATT_NUM'])
+        out.setdefault(dither, []).append(p)
+    return out
+
+
+def write_asn_for_stage3(files: list, asnfile: str, prodname: str, **kwargs):
+    asn = asn_from_list(files, rule=DMS_Level3_Base, product_name=prodname)
+    if 'bg' in kwargs:
+        for bgfile in kwargs['bg']:
+            asn['products'][0]['members'].append(
+                {'expname': bgfile, 'exptype': 'background'}
+            )
+    _, serialized = asn.dump()
+    with open(asnfile, 'w') as outfile:
+        outfile.write(serialized)
+
+
+def reduction_spec3_fn(args: tuple[str, str, str, dict[str, Any]]) -> None:
+    asn_path, input_dir, output_dir, kwargs = args
+    Spec3Pipeline.call(
+        asn_path,
+        input_dir=input_dir,
+        output_dir=output_dir,
+        save_results=True,
+        **kwargs,
+    )
 
 
 def main(*args):
