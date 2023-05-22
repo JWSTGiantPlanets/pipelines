@@ -139,7 +139,6 @@ def run_pipeline(
     if 'stage3' not in skip_steps:
         run_stage3(root_path, stage3_kwargs, reduction_parallel_kwargs)
 
-    # TODO stage3
     # TODO desaturation: combine removed groups data
     # TODO navigate
     # TODO despike
@@ -205,23 +204,41 @@ def run_stage3(
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ):
     log('Running reduction stage 3')
-    dither_sorted_files: dict[int, list[str]] = sort_stage2_files_for_stage3(root_path)
-    for dither, paths_in in dither_sorted_files.items():
+    grouped_files = group_stage2_files_for_stage3(root_path)
+    for dither, paths_grouped in grouped_files.items():
         log(
-            f'Processing dither {dither}/{len(dither_sorted_files)} ({len(paths_in)} files)...'
+            f'Processing dither {dither}/{len(grouped_files)} ({len(paths_grouped)} files)...'
         )
         output_dir = os.path.join(root_path, 'stage3', f'd{dither}')
         check_path(output_dir)
 
+        asn_paths = []
+        for filter_grating, paths in paths_grouped.items():
+            asnfile = os.path.join(output_dir, f'l3asn-{filter_grating}.json')
+            write_asn_for_stage3(paths, asnfile, prodname='Level3')
+            asn_paths.append(asnfile)
 
-def sort_stage2_files_for_stage3(root_path: str) -> dict[int, list[str]]:
-    out: dict[int, list[str]] = {}
+        args_list = [(p, output_dir, stage3_kwargs or {}) for p in sorted(asn_paths)]
+
+        runmany(
+            reduction_spec3_fn,
+            args_list,
+            desc='stage3',
+            **reduction_parallel_kwargs or {},
+        )
+
+
+def group_stage2_files_for_stage3(root_path: str) -> dict[int, dict[str, list[str]]]:
+    out: dict[int, dict[str, list[str]]] = {}
     paths_in = sorted(glob.glob(os.path.join(root_path, 'stage2', '*_cal.fits')))
     for p in paths_in:
         with fits.open(p) as hdul:
             hdr = hdul[0].header  #  type: ignore
         dither = int(hdr['PATT_NUM'])
-        out.setdefault(dither, []).append(p)
+        filter_ = hdr['FILTER']
+        grating = hdr['GRATING']
+        k = f'{filter_}_{grating}'
+        out.setdefault(dither, {}).setdefault(k, []).append(p)
     return out
 
 
@@ -237,11 +254,10 @@ def write_asn_for_stage3(files: list, asnfile: str, prodname: str, **kwargs):
         outfile.write(serialized)
 
 
-def reduction_spec3_fn(args: tuple[str, str, str, dict[str, Any]]) -> None:
-    asn_path, input_dir, output_dir, kwargs = args
+def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    asn_path, output_dir, kwargs = args
     Spec3Pipeline.call(
         asn_path,
-        input_dir=input_dir,
         output_dir=output_dir,
         save_results=True,
         **kwargs,
