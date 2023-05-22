@@ -64,6 +64,7 @@ def run_pipeline(
     end_step: STEP | None = None,
     stage1_kwargs: dict[str, Any] | None = None,
     stage2_kwargs: dict[str, Any] | None = None,
+    stage3_kwargs: dict[str, Any] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
