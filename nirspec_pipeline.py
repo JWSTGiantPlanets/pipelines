@@ -26,8 +26,6 @@ from parallel_tools import runmany
 from tools import check_path, log
 
 # Central record of the filepaths for the various steps of the reduction pipeline
-
-
 STEP: TypeAlias = Literal[
     'remove_groups',
     'stage1',
@@ -180,7 +178,7 @@ def run_stage2(
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ):
     log('Running reduction stage 2')
-    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage1', '*.fits')))
+    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage1', '*rate.fits')))
     output_dir = os.path.join(root_path, 'stage2')
     args_list = [(p, output_dir, stage2_kwargs or {}) for p in paths_in]
     check_path(output_dir)
