@@ -3,7 +3,7 @@
 
 Custom JWST data reduction and visualisation code used to call and extend the [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) to process, reduce and analyse NIRSPEC and MIRI data for solar system observations.
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891560.svg)](https://doi.org/10.5281/zenodo.7891560) [![Pylint](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/pylint.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/pylint.yml) [![Format](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/format.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/format.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891560.svg)](https://doi.org/10.5281/zenodo.7891560) [![Checks](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml)
 
 ## Setup
 Requirements:
