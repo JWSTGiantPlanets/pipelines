@@ -358,7 +358,7 @@ class JWSTReduction:
                     {'expname': bgfile, 'exptype': 'background'}
                 )
         _, serialized = asn.dump()
-        with open(asnfile, 'w') as outfile:
+        with open(asnfile, 'w', encoding='utf-8') as outfile:
             outfile.write(serialized)
 
     def _runmany(self, step: Callable[[str], Any], filepaths: list[str]) -> None:

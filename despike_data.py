@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import tqdm
 from astropy.io import fits

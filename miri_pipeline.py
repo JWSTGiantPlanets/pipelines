@@ -160,7 +160,6 @@ python3 miri_pipeline.py /data/saturn/SATURN-15N --start_step desaturate
 python3 miri_pipeline.py /data/saturn/SATURN-RINGS --kwargs '{"reduction": {"stages": [2, 3]}, "animation": {"radius_factor": 2.5}}'
 """
 import argparse
-import datetime
 import glob
 import json
 import os
@@ -398,7 +397,7 @@ def run_pipeline(
         background_path = os.path.expandvars(os.path.expanduser(background_path))
     flat_data_path = os.path.expandvars(os.path.expanduser(flat_data_path))
 
-    log(f'Running MIRI pipeline')
+    log('Running MIRI pipeline')
     log(f'Root path: {root_path!r}', time=False)
     if skip_steps:
         log(
@@ -406,7 +405,7 @@ def run_pipeline(
             time=False,
         )
     else:
-        log(f'Running all pipeline steps', time=False)
+        log('Running all pipeline steps', time=False)
     log(f'Defringe: {defringe!r}', time=False)
     log(f'Desaturate: {desaturate!r}', time=False)
     if groups_to_use:
@@ -465,7 +464,7 @@ def run_pipeline(
 
     if desaturate and 'remove_groups' not in skip_steps:
         log('Removing groups from data...')
-        files = sorted(glob.glob(os.path.join(root_path, 'stage0', f'*.fits')))
+        files = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
         # Allow customisation of remove_groups() groups_to_use argument with kwargs
         kw = {**dict(groups_to_use=groups_to_use), **(desaturation_kwargs or {})}
         for _p in tqdm.tqdm(files, desc='Removing groups'):
@@ -654,7 +653,7 @@ def run_pipeline(
             animation_fn,
             animation_args,
             parallel_frac=parallel,
-            desc=f'Animating',
+            desc='Animating',
         )
         log('Animation step complete\n')
 

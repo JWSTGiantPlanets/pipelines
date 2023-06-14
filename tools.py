@@ -437,7 +437,7 @@ def print_bar_chart(
             fmt = print_values
         value_strs = [f'{v:{fmt}}' for v in bars]
         labels = [f'{l}|{v}' for l, v in zip(labels, value_strs)]
-    max_label_length = max([len(l) for l in labels])
+    max_label_length = max(len(l) for l in labels)
     max_length = get_console_width() - max_label_length - 2
     for idx, label in enumerate(labels):
         kw = {**kwargs}
@@ -488,6 +488,7 @@ def get_console_width(fallback=75, maximum=98):
         _, width = subprocess.check_output(
             ['stty', 'size'], stderr=subprocess.PIPE
         ).split()
+    # pylint: disable-next=bare-except
     except:
         width = fallback
     width = int(width)

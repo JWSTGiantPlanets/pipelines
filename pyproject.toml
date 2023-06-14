@@ -5,8 +5,31 @@ exclude = ""
 # to black not parsing trailing slashes in .gitignore correctly
 # https://github.com/psf/black/issues/3694
 
-[tool.pylint.'MESSAGES CONTROL']
-disable = ["C", "R", "W", "E1101"]
 
 [tool.isort]
 profile = "black"
+
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = [
+    "C",
+    "fixme",
+    "no-member",
+    "unused-variable",
+    "no-else-return",
+    "use-dict-literal",
+    "duplicate-code",
+    "too-many-arguments",
+    "too-many-instance-attributes",
+    "too-many-locals",
+    "too-many-statements",
+    "too-many-branches",
+    "too-many-public-methods",
+    "too-many-nested-blocks",
+    "too-few-public-methods",
+    "too-many-ancestors",
+    "too-many-return-statements",
+    ]
+enable = [
+    "useless-suppression",
+    ]

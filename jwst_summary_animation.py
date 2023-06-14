@@ -297,11 +297,12 @@ def make_animation(
 
         km_xy_lim = []
         for obs in observations:
+            nx, ny = obs.get_img_size()
             coords = [
                 [-0.5, -0.5],
-                [-0.5, obs._ny - 0.5],
-                [obs._nx - 0.5, -0.5],
-                [obs._nx - 0.5, obs._ny - 0.5],
+                [-0.5, ny - 0.5],
+                [nx - 0.5, -0.5],
+                [nx - 0.5, ny - 0.5],
             ]
             km_xy_lim.extend([obs.radec2km(*obs.xy2radec(x, y)) for x, y in coords])
         km_x_lim, km_y_lim = zip(*km_xy_lim)

@@ -107,7 +107,7 @@ def run_pipeline(
     # Standardise file paths
     root_path = os.path.expandvars(os.path.expanduser(root_path))
 
-    log(f'Running MIRI pipeline')
+    log('Running MIRI pipeline')
     log(f'Root path: {root_path!r}', time=False)
     if skip_steps:
         log(
@@ -115,7 +115,7 @@ def run_pipeline(
             time=False,
         )
     else:
-        log(f'Running all pipeline steps', time=False)
+        log('Running all pipeline steps', time=False)
     log(f'Desaturate: {desaturate!r}', time=False)
     if groups_to_use:
         log(f'Groups to keep: {groups_to_use!r}', time=False)
@@ -248,7 +248,7 @@ def write_asn_for_stage3(files: list, asnfile: str, prodname: str, **kwargs):
                 {'expname': bgfile, 'exptype': 'background'}
             )
     _, serialized = asn.dump()
-    with open(asnfile, 'w') as outfile:
+    with open(asnfile, 'w', encoding='utf-8') as outfile:
         outfile.write(serialized)
 
 
@@ -262,7 +262,7 @@ def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
     )
 
 
-def main(*args):
+def main():
     pass
     # TODO argparse stuff
 

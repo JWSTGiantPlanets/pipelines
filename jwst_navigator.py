@@ -1,6 +1,9 @@
 """
 Based on Henrik's JWSTSolarSystemPointing
 """
+# pylint: disable=attribute-defined-outside-init
+# pylint: disable=logging-not-lazy
+
 import logging
 
 import numpy as np
@@ -210,7 +213,7 @@ class NavigatorBase:
                 + '_lon_{:.2f}'.format(lon)
                 + '_lat_{:.2f}.spx'.format(lat)
             )
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             for line in header:
                 f.write('\t'.join('{:.3f}'.format(x) for x in line))
                 f.write('\n')
@@ -410,6 +413,7 @@ class SolarSystemBodyNavigator(NavigatorBase):
                 self.scloc, vector_target, self.radii[0], self.radii[1], self.radii[2]
             )
             intercept = True
+        # pylint: disable-next=bare-except
         except:
             intercept = False
 
@@ -440,10 +444,10 @@ class SolarSystemBodyNavigator(NavigatorBase):
             )
 
             # Get the localtime, and convert to decimal hours
-            hr, min, sc, time, ampm = spice.et2lst(
+            hr, mn, sc, time, ampm = spice.et2lst(
                 self.et, self.id_target, ret['lon'], 'PLANETOCENTRIC'
             )
-            ret['localtime'] = hr + min / 60.0 + sc / 3600.0
+            ret['localtime'] = hr + mn / 60.0 + sc / 3600.0
 
             # Get the radial velocity for doppler shift calculation
             state, lt = spice.spkcpt(

@@ -155,7 +155,7 @@ def calculate_flat_image(
     pixel_ratios = calculate_pixel_ratios(images, corresponding_pixels)
 
     # Automatically choose a starting pixel near the centre of the image which has data
-    start_idxs = tuple([x // 2 for x in flat.shape])
+    start_idxs = tuple(x // 2 for x in flat.shape)
     index_options = iter(
         sorted(
             np.ndindex(flat.shape),
