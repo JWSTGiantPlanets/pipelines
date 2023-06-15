@@ -7,6 +7,7 @@ TODO
 - Remove groups (optional)
 - Desaturation (optional)
 - Add note about chmodding all the touched files
+- Documentation
 """
 import glob
 import os
