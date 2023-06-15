@@ -477,18 +477,18 @@ def run_pipeline(
         # If desaturating, we also need to reduce the data with fewer groups
         # This list is sorted such that the number of groups is decreasing (so that the
         # desaturation works correctly)
-        reduceed_group_root_paths = sorted(
+        reduced_group_root_paths = sorted(
             glob.glob(os.path.join(root_path, 'groups', '*_groups')),
             reverse=True,
             key=lambda _p: int(os.path.basename(_p).split('_')[0]),
         )
         if groups_to_use is not None:
-            reduceed_group_root_paths = [
+            reduced_group_root_paths = [
                 _p
-                for _p in reduceed_group_root_paths
+                for _p in reduced_group_root_paths
                 if int(os.path.basename(_p).split('_')[0]) in groups_to_use
             ]
-        group_root_paths.extend(reduceed_group_root_paths)
+        group_root_paths.extend(reduced_group_root_paths)
 
     if 'reduce' not in skip_steps:
         log('Reducing data...')

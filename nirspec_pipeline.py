@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NIRSPEC pipeline
+Full JWST reduction pipeline for NIRSpec IFU data.
+
+
 
 TODO
 - Remove groups (optional)
@@ -14,15 +16,18 @@ import os
 import pathlib
 from typing import Any, Literal, TypeAlias
 
+import tqdm
 from astropy.io import fits
 from jwst.associations.asn_from_list import asn_from_list
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
 
+import desaturate_data
 import despike_data
 import jwst_summary_animation
 import jwst_summary_plots
 import navigate_jwst_observations
+import remove_groups
 from parallel_tools import runmany
 from tools import check_path, log
 
@@ -64,6 +69,7 @@ DEFAULT_STAGE2_KWARGS = {
 DEFAULT_STAGE3_KWARGS = {
     'steps': {'cube_build': {'coord_system': 'ifualign'}, 'extract_1d': {'skip': True}}
 }
+DEFAULT_DESATURATE_KWARGS = {}
 DEFAULT_NAVIGATION_KWARGS = {}
 DEFAULT_DESPIKE_KWARGS = {}
 DEFAULT_PLOT_KWARGS = {}
@@ -83,6 +89,7 @@ def run_pipeline(
     stage1_kwargs: dict[str, Any] | None = None,
     stage2_kwargs: dict[str, Any] | None = None,
     stage3_kwargs: dict[str, Any] | None = None,
+    desaturate_kwargs: dict[str, Any] | None = None,
     navigation_kwargs: dict[str, Any] | None = None,
     despike_kwargs: dict[str, Any] | None = None,
     plot_kwargs: dict[str, Any] | None = None,
@@ -151,26 +158,34 @@ def run_pipeline(
     print()
 
     # Run pipeline steps...
+    if desaturate and 'remove_groups' not in skip_steps:
+        run_remove_groups(root_path, groups_to_use)
 
-    # TODO desaturation: remove groups
-    # TODO desaturation: loop through stages1-3 with removed groups
+    # Create list of paths to reduce (both 'main' dataset and reduced groups)
+    group_root_paths = get_group_root_paths(root_path, desaturate, groups_to_use)
 
     if 'stage1' not in skip_steps:
-        run_stage1(root_path, stage1_kwargs, reduction_parallel_kwargs)
+        run_stage1(group_root_paths, stage1_kwargs, reduction_parallel_kwargs)
 
     if 'stage2' not in skip_steps:
-        run_stage2(root_path, stage2_kwargs, reduction_parallel_kwargs)
+        run_stage2(group_root_paths, stage2_kwargs, reduction_parallel_kwargs)
 
     if 'stage3' not in skip_steps:
-        run_stage3(root_path, stage3_kwargs, reduction_parallel_kwargs)
+        run_stage3(group_root_paths, stage3_kwargs, reduction_parallel_kwargs)
 
     if 'navigate' not in skip_steps:
-        run_navigation(root_path, basic_navigation, navigation_kwargs)
+        run_navigation(group_root_paths, basic_navigation, navigation_kwargs)
 
-    # TODO desaturation: combine removed groups data
+    if desaturate and 'desaturate' not in skip_steps:
+        run_desaturate(root_path, group_root_paths, desaturate_kwargs, parallel_kwargs)
 
     if 'despike' not in skip_steps:
-        run_despike(root_path, despike_kwargs, parallel_kwargs)
+        run_despike(
+            root_path,
+            despike_kwargs,
+            parallel_kwargs,
+            input_stage='stage3_desaturated' if desaturate else 'stage3',
+        )
 
     if 'plot' not in skip_steps:
         run_plot(root_path, plot_kwargs, parallel_kwargs)
@@ -189,27 +204,63 @@ def run_pipeline(
     print()
 
 
+# remove groups
+def run_remove_groups(root_path: str, groups_to_use: list[int] | None = None) -> None:
+    log('Removing groups')
+    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage0', '*_uncal.fits')))
+    log(f'Processing {len(paths_in)} files...', time=False)
+    for p in tqdm.tqdm(paths_in, desc='remove_groups'):
+        remove_groups.remove_groups_from_file(p, groups_to_use)
+    log('Remove groups step complete\n')
+
+
+def get_group_root_paths(
+    root_path: str, desaturate: bool, groups_to_use: list[int] | None = None
+) -> list[str]:
+    group_root_paths = [root_path]
+    if desaturate:
+        # If desaturating, we also need to reduce the data with fewer groups
+        # This list is sorted such that the number of groups is decreasing (so that the
+        # desaturation works correctly)
+        reduced_group_root_paths = sorted(
+            glob.glob(os.path.join(root_path, 'groups', '*_groups')),
+            reverse=True,
+            key=lambda _p: int(os.path.basename(_p).split('_')[0]),
+        )
+        if groups_to_use is not None:
+            reduced_group_root_paths = [
+                _p
+                for _p in reduced_group_root_paths
+                if int(os.path.basename(_p).split('_')[0]) in groups_to_use
+            ]
+        group_root_paths.extend(reduced_group_root_paths)
+    return group_root_paths
+
+
 # stage1
 def run_stage1(
-    root_path: str,
+    group_root_paths: list[str],
     stage1_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ):
     log('Running reduction stage 1')
-    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
-    output_dir = os.path.join(root_path, 'stage1')
     kwargs = DEFAULT_STAGE1_KWARGS | (stage1_kwargs or {})
-    args_list = [(p, output_dir, kwargs) for p in paths_in]
-    log(f'Output directory: {output_dir!r}', time=False)
     log(f'Arguments: {kwargs!r}', time=False)
-    log(f'Processing {len(args_list)} files...', time=False)
-    check_path(output_dir)
-    runmany(
-        reduction_detector1_fn,
-        args_list,
-        desc='stage1',
-        **reduction_parallel_kwargs or {},
-    )
+    for root_path in group_root_paths:
+        if len(group_root_paths) > 1:
+            log(f'Running reduction stage 1 for {root_path!r}')
+        paths_in = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
+        output_dir = os.path.join(root_path, 'stage1')
+        args_list = [(p, output_dir, kwargs) for p in paths_in]
+        log(f'Output directory: {output_dir!r}', time=False)
+        log(f'Processing {len(args_list)} files...', time=False)
+        check_path(output_dir)
+        runmany(
+            reduction_detector1_fn,
+            args_list,
+            desc='stage1',
+            **reduction_parallel_kwargs or {},
+        )
     log('Reduction stage 1 step complete\n')
 
 
@@ -220,22 +271,28 @@ def reduction_detector1_fn(args: tuple[str, str, dict[str, Any]]) -> None:
 
 # stage2
 def run_stage2(
-    root_path: str,
+    group_root_paths: list[str],
     stage2_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
     log('Running reduction stage 2')
-    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage1', '*rate.fits')))
-    output_dir = os.path.join(root_path, 'stage2')
     kwargs = DEFAULT_STAGE2_KWARGS | (stage2_kwargs or {})
-    args_list = [(p, output_dir, kwargs) for p in paths_in]
-    log(f'Output directory: {output_dir!r}', time=False)
     log(f'Arguments: {kwargs!r}', time=False)
-    log(f'Processing {len(args_list)} files...', time=False)
-    check_path(output_dir)
-    runmany(
-        reduction_spec2_fn, args_list, desc='stage2', **reduction_parallel_kwargs or {}
-    )
+    for root_path in group_root_paths:
+        if len(group_root_paths) > 1:
+            log(f'Running reduction stage 2 for {root_path!r}')
+        paths_in = sorted(glob.glob(os.path.join(root_path, 'stage1', '*rate.fits')))
+        output_dir = os.path.join(root_path, 'stage2')
+        args_list = [(p, output_dir, kwargs) for p in paths_in]
+        log(f'Output directory: {output_dir!r}', time=False)
+        log(f'Processing {len(args_list)} files...', time=False)
+        check_path(output_dir)
+        runmany(
+            reduction_spec2_fn,
+            args_list,
+            desc='stage2',
+            **reduction_parallel_kwargs or {},
+        )
     log('Reduction stage 2 step complete\n')
 
 
@@ -246,7 +303,7 @@ def reduction_spec2_fn(args: tuple[str, str, dict[str, Any]]) -> None:
 
 # stage3
 def run_stage3(
-    root_path: str,
+    group_root_paths: list[str],
     stage3_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
@@ -254,28 +311,33 @@ def run_stage3(
     kwargs = DEFAULT_STAGE3_KWARGS | (stage3_kwargs or {})
     log(f'Arguments: {kwargs!r}', time=False)
 
-    grouped_files = group_stage2_files_for_stage3(root_path)
-    for dither, paths_grouped in grouped_files.items():
-        log(
-            f'Processing dither {dither}/{len(grouped_files)} ({len(paths_grouped)} files)...'
-        )
-        output_dir = os.path.join(root_path, 'stage3', f'd{dither}')
-        log(f'Output directory: {output_dir!r}', time=False)
-        check_path(output_dir)
-        asn_paths = []
-        for filter_grating, paths in paths_grouped.items():
-            asnfile = os.path.join(output_dir, f'l3asn-{filter_grating}.json')
-            write_asn_for_stage3(paths, asnfile, prodname='Level3')
-            asn_paths.append(asnfile)
+    for root_path in group_root_paths:
+        if len(group_root_paths) > 1:
+            log(f'Running reduction stage 3 for {root_path!r}')
+        grouped_files = group_stage2_files_for_stage3(root_path)
+        for dither, paths_grouped in grouped_files.items():
+            log(
+                f'Processing dither {dither}/{len(grouped_files)} ({len(paths_grouped)} files)...'
+            )
+            output_dir = os.path.join(root_path, 'stage3', f'd{dither}')
+            log(f'Output directory: {output_dir!r}', time=False)
+            check_path(output_dir)
+            asn_paths = []
+            for filter_grating, paths in paths_grouped.items():
+                asnfile = os.path.join(output_dir, f'l3asn-{filter_grating}.json')
+                write_asn_for_stage3(paths, asnfile, prodname='Level3')
+                asn_paths.append(asnfile)
 
-        args_list = [(p, output_dir, stage3_kwargs or {}) for p in sorted(asn_paths)]
+            args_list = [
+                (p, output_dir, stage3_kwargs or {}) for p in sorted(asn_paths)
+            ]
 
-        runmany(
-            reduction_spec3_fn,
-            args_list,
-            desc='stage3',
-            **reduction_parallel_kwargs or {},
-        )
+            runmany(
+                reduction_spec3_fn,
+                args_list,
+                desc='stage3',
+                **reduction_parallel_kwargs or {},
+            )
     log('Reduction stage 3 step complete\n')
 
 
@@ -317,20 +379,58 @@ def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
 
 # navigation
 def run_navigation(
-    root_path: str,
+    group_root_paths: list[str],
     basic_navigation: bool = False,
     navigation_kwargs: dict[str, Any] | None = None,
 ) -> None:
     log('Running navigation')
     kwargs = DEFAULT_NAVIGATION_KWARGS | (navigation_kwargs or {})
-    paths_in = sorted(glob.glob(os.path.join(root_path, 'stage3', 'd*', '*_s3d.fits')))
     log(f'Basic navigation: {basic_navigation!r}', time=False)
     log(f'Arguments: {kwargs!r}', time=False)
     navigate_jwst_observations.load_kernels()
-    navigate_jwst_observations.navigate_multiple(
-        *paths_in, basic=basic_navigation, **kwargs
-    )
+    for root_path in group_root_paths:
+        if len(group_root_paths) > 1:
+            log(f'Running navigation for {root_path!r}')
+        paths_in = sorted(
+            glob.glob(os.path.join(root_path, 'stage3', 'd*', '*_s3d.fits'))
+        )
+        navigate_jwst_observations.navigate_multiple(
+            *paths_in, basic=basic_navigation, **kwargs
+        )
     log('Navigation step complete\n')
+
+
+# desaturation
+def run_desaturate(
+    root_path: str,
+    group_root_paths: list[str],
+    desaturation_kwargs: dict[str, Any] | None = None,
+    parallel_kwargs: dict[str, Any] | None = None,
+) -> None:
+    log('Running desaturate')
+    kwargs = DEFAULT_DESATURATE_KWARGS | (desaturation_kwargs or {})
+    parallel_kwargs = parallel_kwargs or {}
+    log(f'Arguments: {kwargs!r}', time=False)
+
+    paths_dict: dict[str, list[str]] = {}
+    for rp in group_root_paths:
+        paths_in = sorted(glob.glob(os.path.join(rp, 'stage3', 'd*_nav', '*_nav.fits')))
+        for p_in in paths_in:
+            relpath = os.path.relpath(p_in, rp)
+            relpath = replace_path_part(
+                relpath, -3, 'stage3_desaturated', check_old='stage3'
+            )
+            p_out = os.path.join(root_path, relpath)
+            paths_dict.setdefault(p_out, []).append(p_in)
+    args_list = [(paths_in, p_out, kwargs) for p_out, paths_in in paths_dict.items()]
+    log(f'Processing {len(args_list)} output files...', time=False)
+    runmany(desaturation_fn, args_list, desc='desaturate', **parallel_kwargs)
+    log('Desaturate step complete\n')
+
+
+def desaturation_fn(args: tuple[list[str], str, dict[str, Any]]) -> None:
+    paths_in, path_out, kwargs = args
+    desaturate_data.replace_saturated(paths_in, path_out, **kwargs)
 
 
 # despike
