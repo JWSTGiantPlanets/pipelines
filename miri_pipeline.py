@@ -236,7 +236,7 @@ FRINGES = ['', '_fringe']
 CHANNEL_LENGTH_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
 
 # Pipeline constants
-STEP: TypeAlias = Literal[
+Step: TypeAlias = Literal[
     'remove_groups',
     'reduce',
     'navigate',
@@ -247,7 +247,7 @@ STEP: TypeAlias = Literal[
     'plot',
     'animate',
 ]
-STEPS: list[STEP] = [
+STEPS: list[Step] = [
     'remove_groups',
     'reduce',
     'navigate',
@@ -271,9 +271,9 @@ def run_pipeline(
     parallel: float | bool = False,
     flat_data_path: str = DEFAULT_FLAT_DATA_PATH,
     basic_navigation: bool = False,
-    skip_steps: list[STEP] | set[STEP] | None = None,
-    start_step: STEP | None = None,
-    end_step: STEP | None = None,
+    skip_steps: list[Step] | set[Step] | None = None,
+    start_step: Step | None = None,
+    end_step: Step | None = None,
     reduction_kwargs: dict[str, Any] | None = None,
     navigation_kwargs: dict[str, Any] | None = None,
     desaturation_kwargs: dict[str, Any] | None = None,

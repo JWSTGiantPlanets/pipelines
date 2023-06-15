@@ -26,7 +26,7 @@ import navigate_jwst_observations
 from parallel_tools import runmany
 from tools import check_path, log
 
-STEP: TypeAlias = Literal[
+Step: TypeAlias = Literal[
     'remove_groups',
     'stage1',
     'stage2',
@@ -37,7 +37,7 @@ STEP: TypeAlias = Literal[
     'plot',
     'animate',
 ]
-STEPS: list[STEP] = [
+STEPS: list[Step] = [
     'remove_groups',
     'stage1',
     'stage2',
@@ -77,9 +77,9 @@ def run_pipeline(
     groups_to_use: list[int] | None = None,
     parallel: float | bool = False,
     basic_navigation: bool = False,
-    skip_steps: list[STEP] | set[STEP] | None = None,
-    start_step: STEP | None = None,
-    end_step: STEP | None = None,
+    skip_steps: list[Step] | set[Step] | None = None,
+    start_step: Step | None = None,
+    end_step: Step | None = None,
     stage1_kwargs: dict[str, Any] | None = None,
     stage2_kwargs: dict[str, Any] | None = None,
     stage3_kwargs: dict[str, Any] | None = None,
@@ -90,6 +90,9 @@ def run_pipeline(
     parallel_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
+    """
+    TODO
+    """
     # Process args
     parallel_kwargs = dict(
         parallel_frac=parallel,
