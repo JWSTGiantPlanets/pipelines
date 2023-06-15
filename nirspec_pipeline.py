@@ -5,12 +5,7 @@ NIRSPEC pipeline
 
 TODO
 - Remove groups (optional)
-- Reduction stages 3
-- Navigate
 - Desaturation (optional)
-- Despike
-- Plot
-- Animate
 - Add note about chmodding all the touched files
 """
 import glob
