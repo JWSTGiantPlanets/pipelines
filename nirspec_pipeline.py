@@ -1,17 +1,160 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Full JWST reduction pipeline for NIRSpec IFU data.
+Full JWST reduction pipeline for NIRSpec IFU data, including the standard reduction from
+stage0 to stage3, and custom pipeline steps for additional cleaning and data 
+visualisation.
+
+See STEP_DESCRIPTIONS below for a description of each step in this pipeline.
 
 
+Setup
+=====
+If you are running a reduction on Leicester's ALICE HPC then the pipeline should work 
+out of the box without any additional setup - see the example job submission script 
+below. If you are running the pipeline on another machine, you will need to set up the
+correct environment to run the pipeline:
 
-TODO
-- Remove groups (optional)
-- Desaturation (optional)
-- Add note about chmodding all the touched files
-- Documentation
+The `stage1`-`stage3` steps of the pipeline require the following environment variables
+to be set to load the and cache the appropriate CRDS reference files ::
+
+    export CRDS_PATH="path/to/crds_cache"
+    export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
+
+If you are starting with an empty CRDS cache, the pipeline will have to download several
+GB of reference files, so the first run will be much slower. If you are getting errors
+when the reduction pipeline is reading/writing CRDS reference files, try running the 
+reduction step serially (i.e. without the `--parallel` flag) to avoid any potential race
+conditions caused by multiple processes trying to simultaneously download the same 
+reference files.
+
+The navigation and visualisation steps use SPICE kernels to calculate the observation
+geometry. The pipeline will attempt to automatically find the SPICE kernels, but this 
+will generally only work if they are saved in `~/spice_kernels` or you are running the
+code on ALICE. Therefore, the location of these kernels can customised by setting the
+environment variable ::
+
+    export PLANETMAPPER_KERNEL_PATH="path/to/spice_kernels"
+
+For more information on downloading and saving the SPICE kernels, see 
+https://planetmapper.readthedocs.io/en/latest/spice_kernels.html.
+
+
+Usage
+=====
+The pipeline can be run from the command line, or imported and run from Python. To run
+the pipeline to fully reduce a dataset, simply download the stage0 (e.g. to 
+`/data/uranus/lon1/stage0`), then run the following command on the command line ::
+
+    python3 miri_pipeline.py /data/uranus/lon1
+
+or from Python ::
+
+    import miri_pipeline
+    miri_pipeline.run_pipeline('/data/uranus/lon1')
+
+This will run the full pipeline, and output data files appropriate directories (e.g. 
+`/data/uranus/lon1/stage3`, `/data/uranus/lon1/plots` etc.).
+
+For more command line examples, see CLI_EXAMPLES below, and for more Python examples,
+see the docstring for `run_pipeline()` below.
+
+
+Customising logging
+===================
+The the `reduction` step of the pipeline can print a large amount of information to the 
+terminal. To prevent this, you can create a `stpipe-log.cfg` file in your working 
+directory, with the following contents to redirect the output to a file named 
+`pipeline.log` (this `pipeline.log` file will be created automatically if needed, so you
+don't need to create it yourself) ::
+
+    [*]
+    handler = append:pipeline.log
+    level = WARNING
+
+See https://jwst-pipeline.readthedocs.io/en/latest/jwst/stpipe/user_logging.html for
+more details.
+
+Example ALICE HPC job submission script
+=======================================
+The following example job submission script will run the pipeline on ALICE, using
+multiprocessing for the `reduction` step. The chmod commands at the end change the 
+permissions on data and CRDS cache files so that any new/modified files can be accessed 
+by other users in the future.
+
+Depending on the number of dithers/groups/integrations etc. for your data,
+you may need to increase the walltime and decrease the number of nodes (ppn).
+
+To use this script you will need to:
+- replace `py310` in the `conda activate` line to the name of your conda environment
+- replace the two references to `/data/.../SATURN-15N` with the path to your data :: 
+
+    #!/bin/bash
+    #
+    #PBS -N MIRI_Pipeline
+    #PBS -l walltime=24:00:00
+    #PBS -l vmem=80gb
+    #PBS -l nodes=1:ppn=8
+    
+    source ~/.bashrc 
+    conda activate py310 # <-- replace this with the name of your conda environment
+
+    export CRDS_PATH="/data/nemesis/jwst/crds_cache"
+    export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
+
+    # Optionally redirect the verbose `reduction` step output to the file `pipeline.log`
+    if [ -f "/data/nemesis/jwst/scripts/oliver/jwst/stpipe-log.cfg" ]; then
+        cp -f "/data/nemesis/jwst/scripts/oliver/jwst/stpipe-log.cfg" .
+        echo "Copied stpipe-log.cfg to current working directory"
+    fi
+
+    # Run the pipeline
+    python3 /data/nemesis/jwst/scripts/oliver/jwst/miri_pipeline.py /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N --parallel
+    
+    # Change permissions on modified files so that other users can use them
+    chmod -R --quiet 777 /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N
+    chmod -R --quiet 777 $CRDS_PATH
 """
+STEP_DESCRIPTIONS = """
+- `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
+- `stage1`: Run the standard JWST reduction pipeline stage 1.
+- `stage2`: Run the standard JWST reduction pipeline stage 2.
+- `stage3`: Run the standard JWST reduction pipeline stage 3.
+- `navigate`: Navigate reduced files.
+- `desaturate`: Desaturate data using cubes with fewer groups [optional].
+- `despike`: Clean cubes by removing extreme outlier pixels.
+- `plot`: Generate quick look summary plots of data.
+- `animate`: Generate summary animations of data.
+"""
+CLI_EXAMPLES = """examples:
+
+# Print a help message, including documentation for each argument
+python3 nirspec_pipeline.py -h
+
+# Run the full pipeline with all steps enabled
+python3 nirspec_pipeline.py /data/uranus/lon1
+
+# Run the full pipeline in parallel using all cores
+python3 nirspec_pipeline.py /data/uranus/lon1 --parallel
+
+# Run the full pipeline in parallel, using 50% of available cores
+python3 nirspec_pipeline.py /data/uranus/lon1 --parallel 0.5
+
+# Run the full pipeline, without any desaturation
+python3 nirspec_pipeline.py /data/uranus/lon1 --no-desaturate
+
+# Run the pipeline, but stop before creating any visualisations
+python3 nirspec_pipeline.py /data/uranus/lon1 --end-step despike
+
+# Re-run the pipeline, skipping the initial reduction steps
+python3 nirspec_pipeline.py /data/uranus/lon1 --start-step desaturate
+
+# Run the pipeline, passing custom arguments to different steps
+python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}, "animation": {"radius_factor": 2.5}}'
+"""
+import argparse
 import glob
+import json
 import os
 import pathlib
 from typing import Any, Literal, TypeAlias
@@ -61,7 +204,8 @@ DATA_STAGES = [
 ]
 
 # Default arguments for each step. These are merged with the user-supplied kwargs
-# before being passed to the pipeline.
+# before being passed to the pipeline, for example:
+# stage1_kwargs = DEFAULT_STAGE1_KWARGS | stage1_kwargs
 DEFAULT_STAGE1_KWARGS = {}
 DEFAULT_STAGE2_KWARGS = {
     'steps': {'cube_build': {'coord_system': 'ifualign'}, 'extract_1d': {'skip': True}}
@@ -98,7 +242,75 @@ def run_pipeline(
     reduction_parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
-    TODO
+    Run the full NIRSpec IFU reduction pipeline, including the standard reduction from
+    stage0 to stage3, and custom pipeline steps for additional cleaning and data
+    visualisation.
+
+    Examples ::
+
+        from nirspec_pipeline import run_pipeline
+
+        # Run the full pipeline with all steps enabled
+        run_pipeline('/data/uranus/lon1')
+
+        # Run the full pipeline in parallel, using 50% of available cores
+        run_pipeline('/data/uranus/lon1', parallel=0.5)
+
+        # Run the full pipeline, without any desaturation
+        run_pipeline('/data/uranus/lon1', desaturate=False)
+
+        # Run the pipeline, but stop before creating any visualisations
+        run_pipeline('/data/uranus/lon1', end_step='despike')
+
+        # Re-run the pipeline, skipping the initial reduction steps
+        run_pipeline('/data/uranus/lon1', start_step='desaturate')
+
+        # Run the pipeline, passing custom arguments to different steps
+        run_pipeline(
+            '/data/uranus/lon1',
+            stage3_kwargs={
+                'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}
+            },
+            animation_kwargs={'radius_factor': 2.5},
+        )
+
+    Args:
+        root_path: Path to the root directory containing the data. This directory should
+            contain a subdirectory with the stage 0 data (i.e. `root_path/stage0`).
+            Additional directories will be created automatically for each step of the
+            pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.).
+        desaturate: Toggle desaturation of the data. If True, the `stage1` to `navigate`
+            steps will be run for different numbers of groups, which are then combined
+            in the `desaturate` step to produce a desaturated data cube. If False, the
+            `reduction` step will be run only once, with the full number of groups, and
+            the `desaturate` step will be skipped (i.e. going straight to the despike
+            step).
+        parallel: Fraction of CPU cores to use when multiprocessing. Set to 0 to run
+            serially, 1 to use all cores, 0.5 to use half of the cores, etc.
+        groups_to_use: List of groups to reduce and use for desaturating the data. If
+            this is `None` (the default), then all available groups will be used. If
+            `desaturate` is False, then this argument will be ignored. The data with all
+            groups will always be included.
+        basic_navigation: Toggle between basic or full navigation. If True, then only
+            RA and Dec navigation backplanes are generated (e.g. useful for small
+            bodies). If False (the default), then full navigation is performed,
+            generating a full set of coordinate backplanes (lon/lat, illumination
+            angles etc.). Using basic navigation automatically skips the animation step.
+        skip_steps: List of steps to skip. Defaults to None. See `STEPS` above for a
+            list of valid steps. This is mainly useful if you are re-running part of the
+            pipeline.
+        start_step: Convenience argument to add all steps before `start_step` to
+            `skip_steps`.
+        end_step: Convenience argument to add all steps after `end_step` to
+            `skip_steps`.
+
+        stage1_kwargs, stage2_kwargs, stage3_kwargs, desaturate_kwargs,
+        navigation_kwargs, despike_kwargs, plot_kwargs, animate_kwargs: Dictionaries of
+            arguments passed to the corresponding functions for each step of the
+            pipeline. These can therefore be used to override the default values for
+            each step. See the documentation for each function for details on the
+            arguments. See the constants (e.g. DEFAULT_STAGE1_KWARGS) above for the
+            default values.
     """
     # Process args
     parallel_kwargs = dict(
@@ -576,8 +788,93 @@ def replace_path_suffix(path: str, new: str, *, check_old: str | None = None) ->
 
 
 def main():
-    pass
-    # TODO argparse stuff
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description=(
+            'Full JWST NIRSpec IFU pipeline including the standard reduction from '
+            'stage0 to stage3, and custom pipeline steps for additional cleaning and '
+            'data visualisation. For more customisation, this script can be imported '
+            'and run in Python (see the source code for mode details).\n\n'
+            'The following steps are run in the full pipeline:' + STEP_DESCRIPTIONS
+        ),
+        epilog=CLI_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        argument_default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        'root_path',
+        type=str,
+        help="""Path to the directory containing the data. This directory should
+            contain a subdirectory with the stage0 data (i.e. `root_path/stage0`).
+            Additional directories will be created automatically for each step of the
+            pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.).""",
+    )
+    parser.add_argument(
+        '--desaturate',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="""Toggle desaturation of the data. If desaturation is enabled the 
+            `reduction` step will be run for different numbers of groups, which are then
+            combined in the `desaturate` step to produce a desaturated data cube. This
+            desaturation is enabled by default.
+            """,
+    )
+    parser.add_argument(
+        '--parallel',
+        nargs='?',
+        const=1,
+        type=float,
+        help="""Fraction of CPU cores to use when multiprocessing. For example, set 
+        0.5 to use half of the available cores. If unspecified, then multiprocessing 
+        will not be used and the pipeline will be run serially. If specified but no 
+        value is given, then all available cores will be used (i.e. `--parallel` is 
+        equivalent to `--parallel 1`).""",
+    )
+    parser.add_argument(
+        '--groups_to_use',
+        type=str,
+        help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will
+            keep the first four groups. If unspecified, all groups will be kept.""",
+    )
+    parser.add_argument(
+        '--skip_steps',
+        nargs='+',
+        type=str,
+        help="""List of steps to skip. This is generally only useful if you are
+            re-running part of the pipeline.""",
+    )
+    parser.add_argument(
+        '--start_step',
+        type=str,
+        help="""Convenience argument to add all steps before `start_step` to 
+            `skip_steps`.""",
+    )
+    parser.add_argument(
+        '--end_step',
+        type=str,
+        help="""Convenience argument to add all steps steps after `end_step` to 
+            `skip_steps`.""",
+    )
+    parser.add_argument(
+        '--kwargs',
+        type=str,
+        help="""JSON string containing keyword arguments to pass to individual pipeline
+            steps. For example, 
+            `--kwargs '{"stage3": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}, "animation": {"radius_factor": 2.5}}'` 
+            will pass the custom arguments to the stage3 and animation steps.
+            """,
+    )
+    args = vars(parser.parse_args())
+    json_kwargs = args.pop('kwargs', None)
+    if json_kwargs:
+        json_kwargs = json.loads(json_kwargs)
+        for k, v in json_kwargs.items():
+            if not k.endswith('_kwargs'):
+                k = k + '_kwargs'
+            args[k] = v
+    if 'groups_to_use' in args:
+        args['groups_to_use'] = [int(g) for g in args['groups_to_use'].split(',')]
+    run_pipeline(**args)
 
 
 if __name__ == '__main__':

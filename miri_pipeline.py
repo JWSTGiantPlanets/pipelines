@@ -353,7 +353,7 @@ def run_pipeline(
             be replaced by appropriate values for each channel, band and defringe
             setting.
         basic_navigation: Toggle between basic or full navigation. If True, then only
-            RA and Dec nacigation backplanes are generated (e.g. useful for small
+            RA and Dec navigation backplanes are generated (e.g. useful for small
             bodies). If False (the default), then full navigation is performed,
             generating a full set of coordinate backplanes (lon/lat, illumination
             angles etc.). Using basic navigation automatically skips the animation step.
