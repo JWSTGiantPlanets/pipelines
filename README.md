@@ -132,7 +132,7 @@ If you have any issues running the code in this repository, please [open an issu
 If you are getting errors from SpiceyPy, it is likely that your SPICE kernels are not being found correctly. See [the PlanetMapper SPICE kernel documentation](https://planetmapper.readthedocs.io/en/latest/common_issues.html#spice-errors) for more details and instructions on how to fix this.
 
 #### FFmpeg errors
-If you are getting erorrs such as `FileNotFoundError: [Errno 2] No such file or directory: 'ffmpeg'` when generatign animations, it is liekly that [FFmpeg](https://ffmpeg.org/) (the software used by Matplotlib to create animations) is not installed on your system. If you are using a conda environment, you can install FFmpeg with:
+If you are getting errors such as `FileNotFoundError: [Errno 2] No such file or directory: 'ffmpeg'` when generating animations, it is likely that [FFmpeg](https://ffmpeg.org/) (the software used by Matplotlib to create animations) is not installed on your system. If you are using a conda environment, you can install FFmpeg with:
 
 ```bash
 conda install -c conda-forge ffmpeg
