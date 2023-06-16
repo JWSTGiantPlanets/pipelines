@@ -400,7 +400,7 @@ def run_pipeline(
         )
 
     if 'plot' not in skip_steps:
-        run_plot(root_path, plot_kwargs, parallel_kwargs)
+        run_plot(group_root_paths, plot_kwargs, parallel_kwargs)
 
     if 'animate' not in skip_steps:
         run_animate(root_path, animate_kwargs, parallel_kwargs)
@@ -679,7 +679,7 @@ def despike_fn(args: tuple[str, str, dict[str, Any]]) -> None:
 
 # plot
 def run_plot(
-    root_path: str,
+    group_root_paths: list[str],
     plot_kwargs: dict[str, Any] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
@@ -687,20 +687,26 @@ def run_plot(
     kwargs = DEFAULT_PLOT_KWARGS | (plot_kwargs or {})
     parallel_kwargs = parallel_kwargs or {}
     log(f'Arguments: {kwargs!r}', time=False)
-    for stage in reversed(DATA_STAGES):
-        log(f'Generating plots for stage {stage!r}')
-        paths_in = sorted(
-            glob.glob(os.path.join(root_path, stage, 'd*_nav', '*_nav.fits'))
-        )
-        paths_out = [
-            replace_path_part(p, -3, 'plots', check_old=stage) for p in paths_in
-        ]
-        paths_out = [
-            replace_path_suffix(p, '.png', check_old='.fits') for p in paths_out
-        ]
-        args_list = [(p_in, p_out, kwargs) for p_in, p_out in zip(paths_in, paths_out)]
-        log(f'Processing {len(args_list)} files...', time=False)
-        runmany(plot_fn, args_list, desc='plot', **parallel_kwargs)
+    for root_path in group_root_paths:
+        if len(group_root_paths) > 1:
+            log(f'Generating plots for {root_path!r}')
+        for stage in reversed(DATA_STAGES):
+            log(f'Generating plots for stage {stage!r}')
+            paths_in = sorted(
+                glob.glob(os.path.join(root_path, stage, 'd*_nav', '*_nav.fits'))
+            )
+            paths_out = [
+                replace_path_part(p, -3, os.path.join('plots', stage), check_old=stage)
+                for p in paths_in
+            ]
+            paths_out = [
+                replace_path_suffix(p, '.png', check_old='.fits') for p in paths_out
+            ]
+            args_list = [
+                (p_in, p_out, kwargs) for p_in, p_out in zip(paths_in, paths_out)
+            ]
+            log(f'Processing {len(args_list)} files...', time=False)
+            runmany(plot_fn, args_list, desc='plot', **parallel_kwargs)
     log('Plot step complete\n')
 
 
