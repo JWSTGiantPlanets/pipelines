@@ -21,6 +21,12 @@ cd pipelines
 pip install -r requirements.txt
 ```
 
+If it is not already installed, you will also need to install [FFmpeg](https://ffmpeg.org/) to enable the creation of animations from the data cubes. If you are using a conda environment, you can install FFmpeg with:
+
+```bash
+conda install -c conda-forge ffmpeg
+```
+
 The [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) requires the `CRDS_PATH` and `CRDS_SERVER_URL` environment variables to be set to instruct the pipeline where to find and save the various reference files used to reduce the JWST data. These can be set in your `.bashrc` file with:
 ```bash
 export CRDS_PATH="path/to/crds_cache"
@@ -120,6 +126,18 @@ For more detailed documentation, including the various customisation options, se
 
 ## Support
 If you have any issues running the code in this repository, please [open an issue](https://github.com/JWSTGiantPlanets/pipelines/issues/new) or contact ortk2@leicester.ac.uk.
+
+### Common issues
+#### SPICE kernel errors
+If you are getting errors from SpiceyPy, it is likely that your SPICE kernels are not being found correctly. See [the PlanetMapper SPICE kernel documentation](https://planetmapper.readthedocs.io/en/latest/common_issues.html#spice-errors) for more details and instructions on how to fix this.
+
+#### FFmpeg errors
+If you are getting erorrs such as `FileNotFoundError: [Errno 2] No such file or directory: 'ffmpeg'` when generatign animations, it is liekly that [FFmpeg](https://ffmpeg.org/) (the software used by Matplotlib to create animations) is not installed on your system. If you are using a conda environment, you can install FFmpeg with:
+
+```bash
+conda install -c conda-forge ffmpeg
+```
+
 
 ## References
 Fletcher et al. (2023). _Saturn's Atmosphere in Northern Summer Revealed by JWST/MIRI_. Manuscript in preparation.
