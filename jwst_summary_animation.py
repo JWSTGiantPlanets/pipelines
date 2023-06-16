@@ -176,7 +176,7 @@ def make_animation(
             assert title_loc == title
     assert title is not None
     for w in data_wavelengths:
-        assert np.array_equal(data_wavelengths[0], w)
+        assert np.allclose(data_wavelengths[0], w, equal_nan=True)
     wavelengths = data_wavelengths[0]
 
     with tools.ignore_warnings(
