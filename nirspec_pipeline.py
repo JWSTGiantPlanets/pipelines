@@ -529,17 +529,14 @@ def run_stage3(
 
         grouped_files = group_stage2_files_for_stage3(root_path)
         asn_paths_list: list[tuple[str, str]] = []
-        for dither, paths_grouped in grouped_files.items():
+        for (dither, tile, filter_, grating), paths in grouped_files.items():
             output_dir = os.path.join(root_path, 'stage3', f'd{dither}')
             check_path(output_dir)
-            asn_paths = []
-            for filter_grating, paths in paths_grouped.items():
-                asnfile = os.path.join(output_dir, f'l3asn-{filter_grating}.json')
-                write_asn_for_stage3(paths, asnfile, prodname='Level3')
-                asn_paths.append(asnfile)
-
-            for p in sorted(asn_paths):
-                asn_paths_list.append((p, output_dir))
+            asn_path = os.path.join(
+                output_dir, f'l3asn-{tile}_{filter_}_{grating}.json'
+            )
+            write_asn_for_stage3(paths, asn_path, prodname=f'Level3_{tile}')
+            asn_paths_list.append((asn_path, output_dir))
 
         args_list = [
             (p, output_dir, kwargs) for p, output_dir in sorted(asn_paths_list)
@@ -554,17 +551,20 @@ def run_stage3(
     log('Reduction stage 3 step complete\n')
 
 
-def group_stage2_files_for_stage3(root_path: str) -> dict[int, dict[str, list[str]]]:
-    out: dict[int, dict[str, list[str]]] = {}
+def group_stage2_files_for_stage3(
+    root_path: str,
+) -> dict[tuple[int, str, str, str], list[str]]:
+    out: dict[tuple[int, str, str, str], list[str]] = {}
     paths_in = sorted(glob.glob(os.path.join(root_path, 'stage2', '*_cal.fits')))
     for p in paths_in:
         with fits.open(p) as hdul:
             hdr = hdul[0].header  #  type: ignore
         dither = int(hdr['PATT_NUM'])
+        tile = hdr['ACT_ID']
         filter_ = hdr['FILTER']
         grating = hdr['GRATING']
-        k = f'{filter_}_{grating}'
-        out.setdefault(dither, {}).setdefault(k, []).append(p)
+        k = (dither, tile, filter_, grating)
+        out.setdefault(k, []).append(p)
     return out
 
 
