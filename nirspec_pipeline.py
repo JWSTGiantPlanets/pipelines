@@ -144,10 +144,10 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --parallel 0.5
 python3 nirspec_pipeline.py /data/uranus/lon1 --no-desaturate
 
 # Run the pipeline, but stop before creating any visualisations
-python3 nirspec_pipeline.py /data/uranus/lon1 --end-step despike
+python3 nirspec_pipeline.py /data/uranus/lon1 --end_step despike
 
 # Re-run the pipeline, skipping the initial reduction steps
-python3 nirspec_pipeline.py /data/uranus/lon1 --start-step desaturate
+python3 nirspec_pipeline.py /data/uranus/lon1 --start_step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
 python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}, "animation": {"radius_factor": 2.5}}'
@@ -541,7 +541,7 @@ def run_stage3(
                 asn_paths.append(asnfile)
 
             args_list = [
-                (p, output_dir, stage3_kwargs or {}) for p in sorted(asn_paths)
+                (p, output_dir, kwargs) for p in sorted(asn_paths)
             ]
 
             runmany(
@@ -550,6 +550,7 @@ def run_stage3(
                 desc='stage3',
                 **reduction_parallel_kwargs or {},
             )
+            # TODO flattten dithers
     log('Reduction stage 3 step complete\n')
 
 
