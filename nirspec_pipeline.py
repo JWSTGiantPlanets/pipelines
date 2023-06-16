@@ -526,13 +526,11 @@ def run_stage3(
     for root_path in group_root_paths:
         if len(group_root_paths) > 1:
             log(f'Running reduction stage 3 for {root_path!r}')
+
         grouped_files = group_stage2_files_for_stage3(root_path)
+        asn_paths_list: list[tuple[str, str]] = []
         for dither, paths_grouped in grouped_files.items():
-            log(
-                f'Processing dither {dither}/{len(grouped_files)} ({len(paths_grouped)} files)...'
-            )
             output_dir = os.path.join(root_path, 'stage3', f'd{dither}')
-            log(f'Output directory: {output_dir!r}', time=False)
             check_path(output_dir)
             asn_paths = []
             for filter_grating, paths in paths_grouped.items():
@@ -540,17 +538,19 @@ def run_stage3(
                 write_asn_for_stage3(paths, asnfile, prodname='Level3')
                 asn_paths.append(asnfile)
 
-            args_list = [
-                (p, output_dir, kwargs) for p in sorted(asn_paths)
-            ]
+            for p in sorted(asn_paths):
+                asn_paths_list.append((p, output_dir))
 
-            runmany(
-                reduction_spec3_fn,
-                args_list,
-                desc='stage3',
-                **reduction_parallel_kwargs or {},
-            )
-            # TODO flattten dithers
+        args_list = [
+            (p, output_dir, kwargs) for p, output_dir in sorted(asn_paths_list)
+        ]
+        log(f'Processing {len(args_list)} files...', time=False)
+        runmany(
+            reduction_spec3_fn,
+            args_list,
+            desc='stage3',
+            **reduction_parallel_kwargs or {},
+        )
     log('Reduction stage 3 step complete\n')
 
 
