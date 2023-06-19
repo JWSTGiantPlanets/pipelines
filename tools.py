@@ -1,19 +1,21 @@
 """General useful tools"""
-import numpy as np
+import datetime
+import hashlib
+import itertools
+import math
 import os
 import pathlib
-from typing import Callable, ParamSpec, TypeVar, Any
-import function_cache
-import hashlib
 import pickle
-import warnings
-from astropy.io import fits
-import astropy.units as u
-import math
-import datetime
-import itertools
-import subprocess
 import re
+import subprocess
+import warnings
+from typing import Any, Callable, ParamSpec, TypeVar
+
+import astropy.units as u
+import numpy as np
+from astropy.io import fits
+
+import function_cache
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -435,7 +437,7 @@ def print_bar_chart(
             fmt = print_values
         value_strs = [f'{v:{fmt}}' for v in bars]
         labels = [f'{l}|{v}' for l, v in zip(labels, value_strs)]
-    max_label_length = max([len(l) for l in labels])
+    max_label_length = max(len(l) for l in labels)
     max_length = get_console_width() - max_label_length - 2
     for idx, label in enumerate(labels):
         kw = {**kwargs}
@@ -486,6 +488,7 @@ def get_console_width(fallback=75, maximum=98):
         _, width = subprocess.check_output(
             ['stty', 'size'], stderr=subprocess.PIPE
         ).split()
+    # pylint: disable-next=bare-except
     except:
         width = fallback
     width = int(width)

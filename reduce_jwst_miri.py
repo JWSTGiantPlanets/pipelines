@@ -46,12 +46,12 @@ from typing import Any, Callable
 
 import numpy as np
 from astropy.io import fits
-
-import parallel_tools
 from jwst.associations import asn_from_list as afl
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
 from jwst.residual_fringe import ResidualFringeStep
+
+import parallel_tools
 
 
 def main():
@@ -358,7 +358,7 @@ class JWSTReduction:
                     {'expname': bgfile, 'exptype': 'background'}
                 )
         _, serialized = asn.dump()
-        with open(asnfile, 'w') as outfile:
+        with open(asnfile, 'w', encoding='utf-8') as outfile:
             outfile.write(serialized)
 
     def _runmany(self, step: Callable[[str], Any], filepaths: list[str]) -> None:

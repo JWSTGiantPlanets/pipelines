@@ -1,11 +1,12 @@
-import sys
-import tools
-import numpy as np
-from astropy.io import fits
-import save_spx
-import tqdm
-import scipy.interpolate
 from typing import Callable
+
+import numpy as np
+import scipy.interpolate
+import tqdm
+from astropy.io import fits
+
+import save_spx
+import tools
 
 DATA_KEYS = ['SCI', 'ERR']
 

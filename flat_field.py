@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from astropy.io import fits
 import numpy as np
+from astropy.io import fits
+
 import tools
 
 GENERATION_HEADER_PREFIX = 'FLAT GENERATION'

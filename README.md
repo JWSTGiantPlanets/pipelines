@@ -1,9 +1,9 @@
 # JWST custom reduction pipelines
-**[Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSPEC Pipeline](#nirspec-pipeline) | [Support](#support) | [References](#references) | [Examples](#examples)**
+**[Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSpec Pipeline](#nirspec-pipeline) | [Support](#support) | [References](#references) | [Examples](#examples)**
 
-Custom JWST data reduction and visualisation code used to call and extend the [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) to process, reduce and analyse NIRSPEC and MIRI data for solar system observations.
+Custom JWST data reduction and visualisation code used to call and extend the [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) to process, reduce and analyse NIRSpec and MIRI data for solar system observations.
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891559.svg)](https://doi.org/10.5281/zenodo.7891559) [![Pylint](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/pylint.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/pylint.yml) [![Black](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/black.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/black.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891560.svg)](https://doi.org/10.5281/zenodo.7891560) [![Checks](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml)
 
 ## Setup
 Requirements:
@@ -19,6 +19,12 @@ Then install the required Python modules with:
 ```bash
 cd pipelines
 pip install -r requirements.txt
+```
+
+If it is not already installed, you will also need to install [FFmpeg](https://ffmpeg.org/) to enable the creation of animations from the data cubes. If you are using a conda environment, you can install FFmpeg with:
+
+```bash
+conda install -c conda-forge ffmpeg
 ```
 
 The [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) requires the `CRDS_PATH` and `CRDS_SERVER_URL` environment variables to be set to instruct the pipeline where to find and save the various reference files used to reduce the JWST data. These can be set in your `.bashrc` file with:
@@ -101,12 +107,37 @@ Our testing suggests that the flat field appears to be slightly different for di
 
 You can create flat fields yourself using the [`construct_flat_field.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/construct_flat_field.py) script to create a set fo flat fields directly from your dataset. The script takes a set of `stage3` or `stage3_desaturated` dithered observations and uses these to construct a flat field which minimises variation in brightness of each location on the target between dithers. This was designed to work for extended source observations which fill the MIRI field of view and have at least 4 dithers. Observations of objects which do not fill the FOV or have fewer dithers are unlikely to produce reliable flat fields. See [`generate_saturn_flats.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/generate_saturn_flats.py) for an example of how to use [`construct_flat_field.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/construct_flat_field.py) to generate flat fields from a set of observations.
 
-## NIRSPEC pipeline
-_The custom NIRSPEC pipeline is in development and will be released soon..._
+## NIRSpec pipeline
+The [`nirspec_pipeline.py`](https://github.com/ortk95/jwst-pipelines/blob/main/nirspec_pipeline.py) script is used to reduce and process NIRSpec IFU observations of solar system targets. The full custom pipeline includes:
+1. The [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) is used to reduce `stage0` uncalibrated data into `stage3` calibrated data cubes. This keeps individual dithers separate to avoid introducing artefacts from any dither combination process.
+2. Each reduced cube is navigated, and backplanes are created to provide useful coordinates (e.g. latitude, longitude, emission angle, RA, Dec etc.) for each pixel.
+3. Saturated parts of the cubes are identified and desaturated where possible using data reduced using fewer groups.
+4. Extreme outlier pixels are identified and flagged and removed from the data. Note that for small objects or point source observations, this `despike` step may be overaggressive and remove real data.
+5. Quick look [plots and animations](#examples) are generated for each cube.
 
+### Running the NIRSpec pipeline
+Running the NIRSpec pipeline is virtually identical to running the MIRI pipeline [as described above](#running-the-miri-pipeline). Simply download the `stage0` data from the [MAST archive](https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html) as described above, then you can run the full pipeline with:
+
+```bash
+python3 nirspec_pipeline.py /path/to/your/nirspec/data
+```
+
+For more detailed documentation, including the various customisation options, see the instructions at the top of the [`nirspec_pipeline.py`](https://github.com/ortk95/jwst-pipelines/blob/main/nirspec_pipeline.py) file or run `python3 nirspec_pipeline.py --help`.
 
 ## Support
 If you have any issues running the code in this repository, please [open an issue](https://github.com/JWSTGiantPlanets/pipelines/issues/new) or contact ortk2@leicester.ac.uk.
+
+### Common issues
+#### SPICE kernel errors
+If you are getting errors from SpiceyPy, it is likely that your SPICE kernels are not being found correctly. See [the PlanetMapper SPICE kernel documentation](https://planetmapper.readthedocs.io/en/latest/common_issues.html#spice-errors) for more details and instructions on how to fix this.
+
+#### FFmpeg errors
+If you are getting errors such as `FileNotFoundError: [Errno 2] No such file or directory: 'ffmpeg'` when generating animations, it is likely that [FFmpeg](https://ffmpeg.org/) (the software used by Matplotlib to create animations) is not installed on your system. If you are using a conda environment, you can install FFmpeg with:
+
+```bash
+conda install -c conda-forge ffmpeg
+```
+
 
 ## References
 Fletcher et al. (2023). _Saturn's Atmosphere in Northern Summer Revealed by JWST/MIRI_. Manuscript in preparation.

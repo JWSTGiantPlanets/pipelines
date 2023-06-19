@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import tools
-import os
-import tqdm
 import glob
+import os
+import sys
 import urllib.parse
 import urllib.request
+
+import tqdm
 from astropy.io import fits
-import sys
+
+import tools
 
 MAST_URL = (
     'https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/{filename}'

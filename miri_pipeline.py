@@ -160,7 +160,6 @@ python3 miri_pipeline.py /data/saturn/SATURN-15N --start_step desaturate
 python3 miri_pipeline.py /data/saturn/SATURN-RINGS --kwargs '{"reduction": {"stages": [2, 3]}, "animation": {"radius_factor": 2.5}}'
 """
 import argparse
-import datetime
 import glob
 import json
 import os
@@ -177,9 +176,8 @@ import jwst_summary_plots
 import navigate_jwst_observations
 import reduce_jwst_miri
 import remove_groups
-import tools
 from parallel_tools import runmany
-from tools import KeepMissingDict
+from tools import KeepMissingDict, all_combinations, log
 
 # Central record of the filepaths for various steps of the reduction pipeline
 PATH_FITS = os.path.join(
@@ -238,7 +236,7 @@ FRINGES = ['', '_fringe']
 CHANNEL_LENGTH_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
 
 # Pipeline constants
-STEP: TypeAlias = Literal[
+Step: TypeAlias = Literal[
     'remove_groups',
     'reduce',
     'navigate',
@@ -249,7 +247,7 @@ STEP: TypeAlias = Literal[
     'plot',
     'animate',
 ]
-STEPS: list[STEP] = [
+STEPS: list[Step] = [
     'remove_groups',
     'reduce',
     'navigate',
@@ -273,9 +271,9 @@ def run_pipeline(
     parallel: float | bool = False,
     flat_data_path: str = DEFAULT_FLAT_DATA_PATH,
     basic_navigation: bool = False,
-    skip_steps: list[STEP] | set[STEP] | None = None,
-    start_step: STEP | None = None,
-    end_step: STEP | None = None,
+    skip_steps: list[Step] | set[Step] | None = None,
+    start_step: Step | None = None,
+    end_step: Step | None = None,
     reduction_kwargs: dict[str, Any] | None = None,
     navigation_kwargs: dict[str, Any] | None = None,
     desaturation_kwargs: dict[str, Any] | None = None,
@@ -355,7 +353,7 @@ def run_pipeline(
             be replaced by appropriate values for each channel, band and defringe
             setting.
         basic_navigation: Toggle between basic or full navigation. If True, then only
-            RA and Dec nacigation backplanes are generated (e.g. useful for small
+            RA and Dec navigation backplanes are generated (e.g. useful for small
             bodies). If False (the default), then full navigation is performed,
             generating a full set of coordinate backplanes (lon/lat, illumination
             angles etc.). Using basic navigation automatically skips the animation step.
@@ -399,7 +397,7 @@ def run_pipeline(
         background_path = os.path.expandvars(os.path.expanduser(background_path))
     flat_data_path = os.path.expandvars(os.path.expanduser(flat_data_path))
 
-    log(f'Running MIRI pipeline')
+    log('Running MIRI pipeline')
     log(f'Root path: {root_path!r}', time=False)
     if skip_steps:
         log(
@@ -407,7 +405,7 @@ def run_pipeline(
             time=False,
         )
     else:
-        log(f'Running all pipeline steps', time=False)
+        log('Running all pipeline steps', time=False)
     log(f'Defringe: {defringe!r}', time=False)
     log(f'Desaturate: {desaturate!r}', time=False)
     if groups_to_use:
@@ -466,7 +464,7 @@ def run_pipeline(
 
     if desaturate and 'remove_groups' not in skip_steps:
         log('Removing groups from data...')
-        files = sorted(glob.glob(os.path.join(root_path, 'stage0', f'*.fits')))
+        files = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
         # Allow customisation of remove_groups() groups_to_use argument with kwargs
         kw = {**dict(groups_to_use=groups_to_use), **(desaturation_kwargs or {})}
         for _p in tqdm.tqdm(files, desc='Removing groups'):
@@ -479,18 +477,18 @@ def run_pipeline(
         # If desaturating, we also need to reduce the data with fewer groups
         # This list is sorted such that the number of groups is decreasing (so that the
         # desaturation works correctly)
-        reduceed_group_root_paths = sorted(
+        reduced_group_root_paths = sorted(
             glob.glob(os.path.join(root_path, 'groups', '*_groups')),
             reverse=True,
             key=lambda _p: int(os.path.basename(_p).split('_')[0]),
         )
         if groups_to_use is not None:
-            reduceed_group_root_paths = [
+            reduced_group_root_paths = [
                 _p
-                for _p in reduceed_group_root_paths
+                for _p in reduced_group_root_paths
                 if int(os.path.basename(_p).split('_')[0]) in groups_to_use
             ]
-        group_root_paths.extend(reduceed_group_root_paths)
+        group_root_paths.extend(reduced_group_root_paths)
 
     if 'reduce' not in skip_steps:
         log('Reducing data...')
@@ -655,7 +653,7 @@ def run_pipeline(
             animation_fn,
             animation_args,
             parallel_frac=parallel,
-            desc=f'Animating',
+            desc='Animating',
         )
         log('Animation step complete\n')
 
@@ -713,7 +711,7 @@ def get_stage_paths(
     dithers = [str(i + 1) for i in range(ndither)]
 
     paths = []
-    for path_kw in tools.all_combinations(
+    for path_kw in all_combinations(
         dither=dithers,
         channel=CHANNELS,
         band=BANDS,
@@ -721,18 +719,6 @@ def get_stage_paths(
         path_kw['abc'] = CHANNEL_LENGTH_ALIASES[path_kw['band']]
         paths.append(template.format(fringe=fringe, **path_kw))
     return paths
-
-
-def log(*messages: Any, time: bool = True) -> None:
-    """
-    Print a message with a timestamp.
-
-    Args:
-        *messages: Messages passed to `print()`.
-        time: Toggle showing the timestamp.
-    """
-    prefix = datetime.datetime.now().strftime('%H:%M:%S') if time else ' ' * 8
-    print(prefix, *messages, flush=True)
 
 
 def main():

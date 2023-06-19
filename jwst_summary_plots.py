@@ -59,6 +59,7 @@ import os
 import pathlib
 import sys
 import warnings
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker
 import numpy as np
@@ -251,7 +252,7 @@ def make_summary_plot(path_in: str, path_out: str | None = None, show: bool = Fa
     ax.plot(wl, sp, color='k', linewidth=1)
 
     ax.set_xlim(min(wl), max(wl))
-    ax.set_xlabel('Wavelength (µm)'.format())
+    ax.set_xlabel('Wavelength (µm)')
 
     ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
     ax.set_ylabel(f'{sp_type} spectrum')

@@ -1,9 +1,21 @@
-name: Pylint
+name: Checks
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_call]
 
 jobs:
-  lint:
+  black:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: psf/black@stable
+
+  isort:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: isort/isort-action@v1
+
+  pylint:
     runs-on: ubuntu-latest
     strategy:
       matrix:

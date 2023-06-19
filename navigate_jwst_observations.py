@@ -98,7 +98,7 @@ def navigate_multiple(*paths: str, **kw) -> None:
             dates.append(navigate_file(path, **kw))
 
     print(f'Saved backplane data for {len(paths)} files')
-    bad_dates = sum([d > get_latest_jwst_recorded_kernel_date() for d in dates])
+    bad_dates = sum(d > get_latest_jwst_recorded_kernel_date() for d in dates)
     if bad_dates:
         print(f'WARNING: {bad_dates} files were navigated using predicted JWST kernels')
 
@@ -134,28 +134,28 @@ def navigate_file(
         sep = ' ' * 72 + sep + ' ' * (72 * 2 - len(sep))
         header.append(('', sep), useblanks=False, bottom=True)
         date = datetime.datetime.now().isoformat()
-        header.append((f'HIERARCH NAV DATE', date), useblanks=False, bottom=True)
+        header.append(('HIERARCH NAV DATE', date), useblanks=False, bottom=True)
         header.append(
             (
-                f'HIERARCH NAV CLASS',
+                'HIERARCH NAV CLASS',
                 navigator.__class__.__name__,
                 'Navigator class',
             )
         )
-        header.append((f'HIERARCH NAV BASIC', basic, 'Basic navigation used'))
+        header.append(('HIERARCH NAV BASIC', basic, 'Basic navigation used'))
         kernel_date = get_latest_jwst_recorded_kernel_date().isoformat()
         header.append(
             (
-                f'HIERARCH NAV REC_KERNEL_DATE',
+                'HIERARCH NAV REC_KERNEL_DATE',
                 kernel_date,
                 'Latest recorded ephemeris',
             )
         )
         header.append(
-            (f'HIERARCH NAV RA_OFFSET', ra_offset, '[arcsec] Manual RA offset')
+            ('HIERARCH NAV RA_OFFSET', ra_offset, '[arcsec] Manual RA offset')
         )
         header.append(
-            (f'HIERARCH NAV DEC_OFFSET', dec_offset, '[arcsec] Manual Dec offset')
+            ('HIERARCH NAV DEC_OFFSET', dec_offset, '[arcsec] Manual Dec offset')
         )
 
         date_end = datetime.datetime.strptime(
@@ -186,6 +186,7 @@ def load_kernels(kerneldir=KERNEL_DIR) -> None:
     print(f'Latest recorded ephemeris data from {JWST_RECORDED_KERNEL}: {date}')
 
 
+# pylint: disable=protected-access
 def get_latest_jwst_recorded_kernel_date(kerneldir=KERNEL_DIR) -> datetime.datetime:
     if get_latest_jwst_recorded_kernel_date._date is None:
         kerneldir = os.path.expanduser(kerneldir)
@@ -214,6 +215,7 @@ def get_latest_jwst_recorded_kernel_date(kerneldir=KERNEL_DIR) -> datetime.datet
 
 
 get_latest_jwst_recorded_kernel_date._date = None
+# pylint: enable=protected-access
 
 
 def check_path(path) -> None:

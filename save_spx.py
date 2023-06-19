@@ -36,7 +36,7 @@ def save_spx(
     header.append([nav])
     header.append([lat, lon, phase, emission, azimuth, wgeom])
 
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding='utf-8') as f:
         for line in header:
             f.write('\t'.join('{:.3f}'.format(x) for x in line))
             f.write('\n')

@@ -1,6 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.ndimage import median_filter, uniform_filter, generic_filter
+from scipy.ndimage import generic_filter
 
 
 def exp_despike(

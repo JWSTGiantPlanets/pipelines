@@ -34,6 +34,7 @@ import argparse
 import os
 import sys
 from typing import Literal
+
 import matplotlib.animation as mpanim
 import matplotlib.pyplot as plt
 import matplotlib.style as mstyle
@@ -42,6 +43,7 @@ import planetmapper
 import tqdm
 from astropy.io import fits
 from matplotlib.cm import ScalarMappable
+
 import tools
 import zonal_average
 
@@ -174,7 +176,7 @@ def make_animation(
             assert title_loc == title
     assert title is not None
     for w in data_wavelengths:
-        assert np.array_equal(data_wavelengths[0], w)
+        assert np.allclose(data_wavelengths[0], w, equal_nan=True)
     wavelengths = data_wavelengths[0]
 
     with tools.ignore_warnings(
@@ -295,11 +297,12 @@ def make_animation(
 
         km_xy_lim = []
         for obs in observations:
+            nx, ny = obs.get_img_size()
             coords = [
                 [-0.5, -0.5],
-                [-0.5, obs._ny - 0.5],
-                [obs._nx - 0.5, -0.5],
-                [obs._nx - 0.5, obs._ny - 0.5],
+                [-0.5, ny - 0.5],
+                [nx - 0.5, -0.5],
+                [nx - 0.5, ny - 0.5],
             ]
             km_xy_lim.extend([obs.radec2km(*obs.xy2radec(x, y)) for x, y in coords])
         km_x_lim, km_y_lim = zip(*km_xy_lim)

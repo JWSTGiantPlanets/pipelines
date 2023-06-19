@@ -1,13 +1,14 @@
 """
 Script to desaturate data. See desaturate_saturn.py for an example of using this.
 """
-from astropy.io import fits
-import tools
-import numpy as np
 import itertools
 import math
+
+import numpy as np
+from astropy.io import fits
 from scipy.ndimage import maximum_filter
 
+import tools
 
 EXPAND_WINDOW_SPECTRAL = 2
 EXPAND_WINDOW_SPATIAL = 0
@@ -23,7 +24,7 @@ OUTLIER_THRESHOLD_LOW_SNR2 = 30
 OUTLIER_FACTOR_LOW_SNR2 = 3
 
 
-SKIP_GROUPS: dict[int, list[str]] = {
+SKIP_GROUPS_MIRI_CHANNELS: dict[int, list[str]] = {
     1: ['1', '2'],
 }
 
@@ -50,7 +51,7 @@ def replace_saturated(
     Create desaturated data cube using data with reduced groups.
 
     Args:
-        paths: List of paths to data cubes. These should have a decending number of
+        paths: List of paths to data cubes. These should have a descending number of
             groups (e.g. first path has 5 groups, second has 4 groups, third has 3
             groups etc.).
         path_out: File path of desaturated data.
@@ -66,16 +67,28 @@ def replace_saturated(
         cube_arrays[sci_key][-1][dq != 0] = np.nan
         header = hdul['PRIMARY'].header  # type: ignore
         ngroups.append(header['NGROUPS'])
+        instrument = header['INSTRUME']
 
         for p_reduced in paths[1:]:
             try:
                 with fits.open(p_reduced) as hdul_reduced:
                     header_reduced = hdul_reduced['PRIMARY'].header  #  type: ignore
                     # Check that reduced group file is of same observation as main file
-                    for k in ['INSTRUME', 'DATE-BEG', 'PATT_NUM', 'CHANNEL', 'BAND']:
-                        assert header[k] == header_reduced[k]
+                    for k in [
+                        'INSTRUME',
+                        'DATE-BEG',
+                        'PATT_NUM',
+                        'CHANNEL',
+                        'BAND',
+                        'DETECTOR',
+                        'FILTER',
+                        'GRATING',
+                    ]:
+                        assert header.get(k) == header_reduced.get(k)
                     ng = header_reduced['NGROUPS']
-                    if header_reduced['CHANNEL'] in SKIP_GROUPS.get(ng, []):
+                    if instrument == 'MIRI' and header_reduced[
+                        'CHANNEL'
+                    ] in SKIP_GROUPS_MIRI_CHANNELS.get(ng, []):
                         continue
                     ngroups.append(ng)
                     for k in keys:

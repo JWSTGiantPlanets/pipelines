@@ -1,12 +1,14 @@
-import numpy as np
-from astropy.io import fits
-import tqdm
-from typing import TypeAlias
-import math
-import tools
-import statistics
 import datetime
+import math
+import statistics
+from typing import TypeAlias
+
+import numpy as np
+import tqdm
+from astropy.io import fits
+
 import flat_field
+import tools
 
 VARIABLE_HEADER_KEYS = ['DATE', 'DATASET']
 HEADER_PREFIX = flat_field.GENERATION_HEADER_PREFIX
@@ -153,7 +155,7 @@ def calculate_flat_image(
     pixel_ratios = calculate_pixel_ratios(images, corresponding_pixels)
 
     # Automatically choose a starting pixel near the centre of the image which has data
-    start_idxs = tuple([x // 2 for x in flat.shape])
+    start_idxs = tuple(x // 2 for x in flat.shape)
     index_options = iter(
         sorted(
             np.ndindex(flat.shape),
