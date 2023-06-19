@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Update all stage0 files in a given directory with the latest version from MAST.
+
+Simply call this script with the path to the directory containing the stage0 files
+as the first argument. For example:
+
+    python3 update_stage0_files.py /path/to/data/directory/stage0
+
+Will replace all stage0 FITS files in the given directory with the latest versions
+from MAST. Note that the old files will be overwritten, so make sure you have a
+backup if you need to keep them.
+"""
 import glob
 import os
 import sys
