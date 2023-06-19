@@ -94,7 +94,7 @@ To use this script you will need to:
     #PBS -N MIRI_Pipeline
     #PBS -l walltime=24:00:00
     #PBS -l vmem=80gb
-    #PBS -l nodes=1:ppn=8
+    #PBS -l nodes=1:ppn=4
     
     source ~/.bashrc 
     conda activate py310 # <-- replace this with the name of your conda environment
@@ -109,7 +109,7 @@ To use this script you will need to:
     fi
 
     # Run the pipeline
-    python3 /data/nemesis/jwst/scripts/oliver/jwst/miri_pipeline.py /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N --parallel
+    python3 /data/nemesis/jwst/scripts/oliver/jwst/nirspec_pipeline.py /data/uranus/lon1 --parallel
     
     # Change permissions on modified files so that other users can use them
     chmod -R --quiet 777 /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N
