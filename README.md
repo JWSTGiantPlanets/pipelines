@@ -49,7 +49,7 @@ download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/')
 download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/')
 
 # JWST kernels
-download_urls('https://naif.jpl.nasa.gov/pub/naif/HST/kernels/spk/')
+download_urls('https://naif.jpl.nasa.gov/pub/naif/JWST/kernels/spk/')
 
 # Locations of planetary system barycentres:
 download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de430.bsp')
