@@ -110,13 +110,13 @@ To use this script you will need to:
     export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
 
     # Optionally redirect the verbose `reduction` step output to the file `pipeline.log`
-    if [ -f "/data/nemesis/jwst/scripts/oliver/jwst/stpipe-log.cfg" ]; then
-        cp -f "/data/nemesis/jwst/scripts/oliver/jwst/stpipe-log.cfg" .
+    if [ -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" ]; then
+        cp -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" .
         echo "Copied stpipe-log.cfg to current working directory"
     fi
 
     # Run the pipeline
-    python3 /data/nemesis/jwst/scripts/oliver/jwst/miri_pipeline.py /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N --parallel
+    python3 /data/nemesis/jwst/scripts/oliver/pipelines/miri_pipeline.py /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N --parallel
     
     # Change permissions on modified files so that other users can use them
     chmod -R --quiet 777 /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N
