@@ -112,7 +112,7 @@ To use this script you will need to:
     python3 /data/nemesis/jwst/scripts/oliver/pipelines/nirspec_pipeline.py /data/uranus/lon1 --parallel
     
     # Change permissions on modified files so that other users can use them
-    chmod -R --quiet 777 /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N
+    chmod -R --quiet 777 /data/uranus/lon1
     chmod -R --quiet 777 $CRDS_PATH
 """
 STEP_DESCRIPTIONS = """
