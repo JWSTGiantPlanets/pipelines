@@ -848,6 +848,14 @@ def main():
             keep the first four groups. If unspecified, all groups will be kept.""",
     )
     parser.add_argument(
+        '--basic_navigation',
+        action='store_true',
+        help="""Use basic navigation, and only save RA and Dec backplanes (e.g. useful
+            for small bodies). By default, full navigation is performed, generating a
+            full set of coordinate backplanes (lon/lat, illumination angles etc.). Using
+            basic navigation automatically skips the navigation step.""",
+    )
+    parser.add_argument(
         '--skip_steps',
         nargs='+',
         type=str,
