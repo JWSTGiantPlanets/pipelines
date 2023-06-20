@@ -161,6 +161,7 @@ from typing import Any, Literal, TypeAlias
 
 import tqdm
 from astropy.io import fits
+from jwst.assign_wcs.util import NoDataOnDetectorError
 from jwst.associations.asn_from_list import asn_from_list
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
@@ -510,7 +511,10 @@ def run_stage2(
 
 def reduction_spec2_fn(args: tuple[str, str, dict[str, Any]]) -> None:
     path_in, output_dir, kwargs = args
-    Spec2Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
+    try:
+        Spec2Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
+    except NoDataOnDetectorError:
+        log(f'No data on detector for {path_in!r}, skipping')
 
 
 # stage3
