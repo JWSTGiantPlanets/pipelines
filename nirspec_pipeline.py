@@ -860,7 +860,8 @@ def main():
         nargs='+',
         type=str,
         help="""List of steps to skip. This is generally only useful if you are
-            re-running part of the pipeline.""",
+            re-running part of the pipeline. Multiple steps can be passed as a
+            space-separated list. For example, `--skip_steps flat despike`.""",
     )
     parser.add_argument(
         '--start_step',
