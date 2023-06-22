@@ -46,12 +46,12 @@ The pipeline can be run from the command line, or imported and run from Python. 
 the pipeline to fully reduce a dataset, simply download the stage0 (e.g. to 
 `/data/uranus/lon1/stage0`), then run the following command on the command line ::
 
-    python3 miri_pipeline.py /data/uranus/lon1
+    python3 nirspec_pipeline.py /data/uranus/lon1
 
 or from Python ::
 
-    import miri_pipeline
-    miri_pipeline.run_pipeline('/data/uranus/lon1')
+    import nirspec_pipeline
+    nirspec_pipeline.run_pipeline('/data/uranus/lon1')
 
 This will run the full pipeline, and output data files appropriate directories (e.g. 
 `/data/uranus/lon1/stage3`, `/data/uranus/lon1/plots` etc.).
@@ -91,7 +91,7 @@ To use this script you will need to:
 
     #!/bin/bash
     #
-    #PBS -N MIRI_Pipeline
+    #PBS -N NIRSpec_Pipeline
     #PBS -l walltime=24:00:00
     #PBS -l vmem=80gb
     #PBS -l nodes=1:ppn=4
@@ -354,7 +354,7 @@ def run_pipeline(
     # Standardise file paths
     root_path = os.path.expandvars(os.path.expanduser(root_path))
 
-    log('Running MIRI pipeline')
+    log('Running NIRSpec pipeline')
     log(f'Root path: {root_path!r}', time=False)
     if skip_steps:
         log(
