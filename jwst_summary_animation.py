@@ -325,15 +325,19 @@ def make_animation(
             ax.set_xticks([])
             ax.set_yticks([])
 
-            for ax in (axs[obs_idx][1], axs[obs_idx][2]):
+            for i, ax in enumerate([axs[obs_idx][1], axs[obs_idx][2]]):
+                zorder = 0
+                if i == 0 and obs.get_r0() < 30:
+                    zorder = 5
+
                 obs.plot_wireframe_km(
                     ax,
                     aspect_adjustable='datalim',
                     add_title=False,
                     add_axis_labels=False,
                     color=WIREFRAME_COLOR,
-                    label_poles=False,
-                    zorder=0,
+                    label_poles=zorder == 5,
+                    zorder=zorder,
                 )
                 ax.set_xticks([])
                 ax.set_yticks([])
