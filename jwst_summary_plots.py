@@ -81,7 +81,13 @@ def main(p_in, p_out):
     make_summary_plot(p_in, p_out)
 
 
-def make_summary_plot(path_in: str, path_out: str | None = None, show: bool = False):
+def make_summary_plot(
+    path_in: str,
+    path_out: str | None = None,
+    show: bool = False,
+    vmin_percentile: float = 0,
+    vmax_percentile: float = 100,
+):
     """
     Create and save a summary plot of a JWST observation.
 
@@ -168,7 +174,7 @@ def make_summary_plot(path_in: str, path_out: str | None = None, show: bool = Fa
                 body.target_dec,
                 color='k',
                 marker='x',  # type: ignore
-                zorder=5,
+                zorder=10,
             )
         else:
             body.plot_wireframe_radec(ax)
@@ -224,8 +230,28 @@ def make_summary_plot(path_in: str, path_out: str | None = None, show: bool = Fa
         size='small',
     )
 
+    vmin_vmax_notes = []
+    if vmin_percentile != 0 or vmax_percentile != 100:
+        vmin_vmax_notes.append('Image percentile limits')
+        vmin_vmax_notes.append(f'min={vmin_percentile}%, max={vmax_percentile}%')
+    ax.annotate(
+        '\n'.join(vmin_vmax_notes),
+        (0.995, 0.01),
+        xycoords='axes fraction',
+        ha='right',
+        va='bottom',
+        size='small',
+    )
+
     # ax.contourf(ra_img % 360, dec_img, img, cmap=DATA_CMAP, levels=255)
-    ax.pcolormesh(ra_img % 360, dec_img, img, cmap=DATA_CMAP)
+    ax.pcolormesh(
+        ra_img % 360,
+        dec_img,
+        img,
+        cmap=DATA_CMAP,
+        vmin=np.nanpercentile(img, vmin_percentile),
+        vmax=np.nanpercentile(img, vmax_percentile),
+    )
 
     title_parts = [
         primary_header['TARGPROP'],
@@ -293,7 +319,13 @@ def make_summary_plot(path_in: str, path_out: str | None = None, show: bool = Fa
         ) + np.nanmean(np.isnan(data[np.logical_and(wl >= wl0, wl < wl1)]), axis=0)
         img_sat[img_sat == 0] = np.nan
 
-        ax_data.imshow(img_data, cmap=DATA_CMAP, origin='lower')
+        ax_data.imshow(
+            img_data,
+            cmap=DATA_CMAP,
+            origin='lower',
+            vmin=np.nanpercentile(img_data, vmin_percentile),
+            vmax=np.nanpercentile(img_data, vmax_percentile),
+        )
         ax_sat.imshow(img_sat, cmap=SATURATION_CMAP, origin='lower', vmin=-0.15, vmax=1)
 
         for ax in [ax_data, ax_sat]:
