@@ -406,7 +406,7 @@ def run_pipeline(
     if 'animate' not in skip_steps:
         run_animate(root_path, animate_kwargs, parallel_kwargs)
 
-    log('NIRSPEC pipeline complete')
+    log('NIRSpec pipeline complete')
     log(f'Root path: {root_path!r}', time=False)
     log(f'Desaturate: {desaturate!r}', time=False)
     if skip_steps:
