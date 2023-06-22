@@ -150,7 +150,7 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --end_step despike
 python3 nirspec_pipeline.py /data/uranus/lon1 --start_step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
-python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}, "animation": {"radius_factor": 2.5}}'
+python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "animation": {"radius_factor": 2.5}}'
 """
 import argparse
 import glob
@@ -860,7 +860,8 @@ def main():
         nargs='+',
         type=str,
         help="""List of steps to skip. This is generally only useful if you are
-            re-running part of the pipeline.""",
+            re-running part of the pipeline. Multiple steps can be passed as a
+            space-separated list. For example, `--skip_steps flat despike`.""",
     )
     parser.add_argument(
         '--start_step',
@@ -879,7 +880,7 @@ def main():
         type=str,
         help="""JSON string containing keyword arguments to pass to individual pipeline
             steps. For example, 
-            `--kwargs '{"stage3": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}, "animation": {"radius_factor": 2.5}}'` 
+            `--kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "animation": {"radius_factor": 2.5}}'` 
             will pass the custom arguments to the stage3 and animation steps.
             """,
     )
