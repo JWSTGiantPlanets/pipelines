@@ -61,6 +61,15 @@ defringe step disabled, then with it enabled. If you only want defringed or
 non-defringed data, you can customise this behaviour with the `defringe` argument or the
 `--defringe` or `--no-defringe` flags.
 
+If the pipeline is run with desaturation enabled, the pipeline flow is:
+- Firstly, multiple versions of the stage0 cubes are greated with different numbers of 
+  groups (the `remove_groups` step).
+- The `reduction` and `navigation` steps are run on e.g. the 4 group data, then the
+  3 group data, then the 2 group data, then the 1 group data.
+- The `desaturate` step is then run to combine the various group data into a single
+  desaturated dataset.
+- Subsequent pipeline steps (e.g. `plot`) are run on the desaturated data.
+
 For more command line examples, see CLI_EXAMPLES below, and for more Python examples,
 see the docstring for `run_pipeline()` below.
 
@@ -152,6 +161,9 @@ python3 miri_pipeline.py /data/saturn/SATURN-15N --background_path /data/saturn/
 
 # Run the pipeline, but stop before creating any visualisations
 python3 miri_pipeline.py /data/saturn/SATURN-15N --end_step despike
+
+# Only run the plotting step
+python3 miri_pipeline.py /data/saturn/SATURN-15N --start_step plot --end_step plot
 
 # Re-run the pipeline, skipping the initial reduction steps
 python3 miri_pipeline.py /data/saturn/SATURN-15N --start_step desaturate

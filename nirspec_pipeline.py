@@ -56,6 +56,16 @@ or from Python ::
 This will run the full pipeline, and output data files appropriate directories (e.g. 
 `/data/uranus/lon1/stage3`, `/data/uranus/lon1/plots` etc.).
 
+If the pipeline is run with desaturation enabled, the pipeline flow is:
+- Firstly, multiple versions of the stage0 cubes are greated with different numbers of 
+  groups (the `remove_groups` step).
+- `stage1` is run on e.g. the 4 group data, then the 3 group data, then the 2 group
+  data, then the 1 group data. Then `stage2` is run on the 4-1 group data, then 
+  `stage3`, then `navigate`.
+- The `desaturate` step is then run to combine the various group data into a single
+  desaturated dataset.
+- Subsequent pipeline steps (e.g. `plot`) are run on the desaturated data.
+
 For more command line examples, see CLI_EXAMPLES below, and for more Python examples,
 see the docstring for `run_pipeline()` below.
 
@@ -74,6 +84,7 @@ don't need to create it yourself) ::
 
 See https://jwst-pipeline.readthedocs.io/en/latest/jwst/stpipe/user_logging.html for
 more details.
+
 
 Example ALICE HPC job submission script
 =======================================
@@ -145,6 +156,9 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --no-desaturate
 
 # Run the pipeline, but stop before creating any visualisations
 python3 nirspec_pipeline.py /data/uranus/lon1 --end_step despike
+
+# Only run the plotting step
+python3 nirspec_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
 
 # Re-run the pipeline, skipping the initial reduction steps
 python3 nirspec_pipeline.py /data/uranus/lon1 --start_step desaturate
