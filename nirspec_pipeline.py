@@ -406,7 +406,7 @@ def run_pipeline(
     if 'animate' not in skip_steps:
         run_animate(root_path, animate_kwargs, parallel_kwargs)
 
-    log('NIRSPEC pipeline complete')
+    log('NIRSpec pipeline complete')
     log(f'Root path: {root_path!r}', time=False)
     log(f'Desaturate: {desaturate!r}', time=False)
     if skip_steps:
@@ -668,7 +668,7 @@ def run_despike(
     parallel_kwargs = parallel_kwargs or {}
     kwargs = DEFAULT_DESPIKE_KWARGS | (despike_kwargs or {})
     if parallel_kwargs.get('parallel_frac', False):
-        kwargs['progress_bar'] = False
+        kwargs.setdefault('progress_bar', False)
     args_list = [(p_in, p_out, kwargs) for p_in, p_out in zip(paths_in, paths_out)]
     log(f'Arguments: {kwargs!r}', time=False)
     log(f'Processing {len(args_list)} files...', time=False)
@@ -728,6 +728,8 @@ def run_animate(
     log('Generating quick look animations')
     kwargs = DEFAULT_ANIMATE_KWARGS | (animate_kwargs or {})
     parallel_kwargs = parallel_kwargs or {}
+    if parallel_kwargs.get('parallel_frac', False):
+        kwargs.setdefault('progress_bar', False)
     log(f'Arguments: {kwargs!r}', time=False)
     for stage in reversed(DATA_STAGES):
         log(f'Generating animations for stage {stage!r}')
