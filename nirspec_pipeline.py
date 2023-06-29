@@ -98,7 +98,7 @@ you may need to increase the walltime and decrease the number of nodes (ppn).
 
 To use this script you will need to:
 - replace `py310` in the `conda activate` line to the name of your conda environment
-- replace the two references to `/data/.../SATURN-15N` with the path to your data :: 
+- replace the two references to `/data/uranus/lon1` with the path to your data :: 
 
     #!/bin/bash
     #
@@ -552,11 +552,10 @@ def run_stage3(
             output_dir = os.path.join(root_path, 'stage3', dirname)
             check_path(output_dir)
             asn_path = os.path.join(
-                output_dir, f'l3asn-{tile}_{filter_}_{grating}.json'
+                output_dir, f'l3asn-{tile}_{filter_}_{grating}_dither-{dither}.json'
             )
             write_asn_for_stage3(paths, asn_path, prodname=f'Level3_{tile}')
             asn_paths_list.append((asn_path, output_dir))
-
         args_list = [
             (p, output_dir, kwargs) for p, output_dir in sorted(asn_paths_list)
         ]
@@ -590,11 +589,12 @@ def group_stage2_files_for_stage3(
         # Combine dithers
         k = (None, tile, filter_, grating)
         out.setdefault(k, []).append(p)
-
     return out
 
 
-def write_asn_for_stage3(files: list, asnfile: str, prodname: str, **kwargs) -> None:
+def write_asn_for_stage3(
+    files: list[str], asnfile: str, prodname: str, **kwargs
+) -> None:
     asn = asn_from_list(files, rule=DMS_Level3_Base, product_name=prodname)
     if 'bg' in kwargs:
         for bgfile in kwargs['bg']:

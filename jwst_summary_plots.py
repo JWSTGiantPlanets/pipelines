@@ -255,9 +255,15 @@ def make_summary_plot(
         vmax=np.nanpercentile(img, vmax_percentile),
     )
 
+    if 'dither-combined' in primary_header['ASNTABLE']:
+        # Dither combinations still have PATT_NUM = 1, so use asn filename as flag
+        dither = 'combined'
+    else:
+        dither = primary_header['PATT_NUM']
+
     title_parts = [
         primary_header['TARGPROP'],
-        'Dither {}'.format(primary_header['PATT_NUM']),
+        f'Dither {dither}',
         primary_header['INSTRUME'],
     ]
     if instrument == 'MIRI':
