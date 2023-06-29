@@ -361,7 +361,6 @@ def run_pipeline(
         if end_step not in STEPS:
             raise ValueError(f'Invalid end step: {end_step!r} (valid steps: {STEPS})')
         skip_steps.update(STEPS[STEPS.index(end_step) + 1 :])
-
     if basic_navigation:
         skip_steps.add('animate')
 
