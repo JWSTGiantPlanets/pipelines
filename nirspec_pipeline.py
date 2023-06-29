@@ -534,7 +534,8 @@ def run_stage3(
         grouped_files = group_stage2_files_for_stage3(root_path)
         asn_paths_list: list[tuple[str, str]] = []
         for (dither, tile, filter_, grating), paths in grouped_files.items():
-            output_dir = os.path.join(root_path, 'stage3', f'd{dither}')
+            dirname = 'combined' if dither is None else f'd{dither}'
+            output_dir = os.path.join(root_path, 'stage3', dirname)
             check_path(output_dir)
             asn_path = os.path.join(
                 output_dir, f'l3asn-{tile}_{filter_}_{grating}.json'
@@ -557,8 +558,8 @@ def run_stage3(
 
 def group_stage2_files_for_stage3(
     root_path: str,
-) -> dict[tuple[int, str, str, str], list[str]]:
-    out: dict[tuple[int, str, str, str], list[str]] = {}
+) -> dict[tuple[int | None, str, str, str], list[str]]:
+    out: dict[tuple[int | None, str, str, str], list[str]] = {}
     paths_in = sorted(glob.glob(os.path.join(root_path, 'stage2', '*_cal.fits')))
     for p in paths_in:
         with fits.open(p) as hdul:
@@ -567,8 +568,15 @@ def group_stage2_files_for_stage3(
         tile = hdr['ACT_ID']
         filter_ = hdr['FILTER']
         grating = hdr['GRATING']
+
+        # Keep dithers separate
         k = (dither, tile, filter_, grating)
         out.setdefault(k, []).append(p)
+
+        # Combine dithers
+        k = (None, tile, filter_, grating)
+        out.setdefault(k, []).append(p)
+
     return out
 
 
@@ -609,7 +617,7 @@ def run_navigation(
         if len(group_root_paths) > 1:
             log(f'Running navigation for {root_path!r}')
         paths_in = sorted(
-            glob.glob(os.path.join(root_path, 'stage3', 'd*', '*_s3d.fits'))
+            glob.glob(os.path.join(root_path, 'stage3', '*', '*_s3d.fits'))
         )
         navigate_jwst_observations.navigate_multiple(
             *paths_in, basic=basic_navigation, **kwargs
@@ -631,7 +639,7 @@ def run_desaturate(
 
     paths_dict: dict[str, list[str]] = {}
     for rp in group_root_paths:
-        paths_in = sorted(glob.glob(os.path.join(rp, 'stage3', 'd*_nav', '*_nav.fits')))
+        paths_in = sorted(glob.glob(os.path.join(rp, 'stage3', '*_nav', '*_nav.fits')))
         for p_in in paths_in:
             relpath = os.path.relpath(p_in, rp)
             relpath = replace_path_part(
@@ -659,7 +667,7 @@ def run_despike(
 ) -> None:
     log('Running despike')
     paths_in = sorted(
-        glob.glob(os.path.join(root_path, input_stage, 'd*_nav', '*_nav.fits'))
+        glob.glob(os.path.join(root_path, input_stage, '*_nav', '*_nav.fits'))
     )
     paths_out = [
         replace_path_part(p, -3, 'stage4_despike', check_old=input_stage)
@@ -697,7 +705,7 @@ def run_plot(
         for stage in reversed(DATA_STAGES):
             log(f'Generating plots for stage {stage!r}')
             paths_in = sorted(
-                glob.glob(os.path.join(root_path, stage, 'd*_nav', '*_nav.fits'))
+                glob.glob(os.path.join(root_path, stage, '*_nav', '*_nav.fits'))
             )
             paths_out = [
                 replace_path_part(p, -3, os.path.join('plots', stage), check_old=stage)
