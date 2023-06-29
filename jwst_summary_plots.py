@@ -61,6 +61,7 @@ import sys
 import warnings
 
 import matplotlib.pyplot as plt
+import matplotlib.scale
 import matplotlib.ticker
 import numpy as np
 import planetmapper
@@ -87,6 +88,7 @@ def make_summary_plot(
     show: bool = False,
     vmin_percentile: float = 0,
     vmax_percentile: float = 100,
+    plot_brightest_spectrum: bool = True,
 ):
     """
     Create and save a summary plot of a JWST observation.
@@ -138,10 +140,10 @@ def make_summary_plot(
 
     with ignore_warnings('Mean of empty slice'):
         if instrument == 'NIRSPEC':
-            sp = np.nanmedian(data, axis=(1, 2))
+            sp_fn = np.nanmedian
             sp_type = 'Median'
         else:
-            sp = np.nanmean(data, axis=(1, 2))
+            sp_fn = np.nanmean
             sp_type = 'Mean'
     sp_saturated = np.sum(data == 0, axis=(1, 2)) + np.sum(np.isnan(data), axis=(1, 2))
 
@@ -275,30 +277,53 @@ def make_summary_plot(
     ax.set_title('  |  '.join(title_parts))
 
     ax = ax_sp
+    sp = sp_fn(data, axis=(1, 2))
+    data_to_use = img > np.nanpercentile(img, 90)
+    sp_max = sp_fn(data[:, data_to_use], axis=1)
+
+    if plot_brightest_spectrum:
+        ax.plot(wl, sp_max, color='tab:blue', linewidth=1)
     ax.plot(wl, sp, color='k', linewidth=1)
+    if plot_brightest_spectrum:
+        for s, c in [
+            ('Whole cube', 'k'),
+            (' ' * 20 + 'Brightest 10% spaxels', 'tab:blue'),
+        ]:
+            ax.annotate(
+                s,
+                (0.005, 0.99),
+                xycoords='axes fraction',
+                ha='left',
+                va='top',
+                size='x-small',
+                color=c,
+                zorder=0,
+            )
 
     ax.set_xlim(min(wl), max(wl))
     ax.set_xlabel('Wavelength (µm)')
 
     ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-    ax.set_ylabel(f'{sp_type} spectrum')
-    if np.sum(sp < 0) > len(sp) / 3 or np.all(~np.isfinite(sp)):
+    sp_units = data_header['BUNIT']
+    ax.set_ylabel(f'{sp_type} spectrum ({sp_units})')
+    if np.sum(sp_max < 0) > len(sp_max) / 3 or np.all(~np.isfinite(sp_max)):
         ax.set_ylabel(ax.get_ylabel() + ' (linear scale)')
     else:
         ax.set_yscale('log')
     if instrument == 'NIRSPEC':
         ylim = ax.get_ylim()
-        ax.set_ylim(
-            max(ylim[0], np.nanpercentile(sp, 1) / 10),
-            min(ylim[1], np.nanpercentile(sp, 99) * 10),
+        ymin = max(
+            ylim[0], min(max(np.nanpercentile(sp, 5) / 10, 5e-2), np.nanmin(sp_max))
         )
+        if ymin > 0 or ax.get_yscale() != 'log':
+            ax.set_ylim(bottom=ymin)
 
     ax = ax.twinx()
     ax.plot(wl, sp_saturated, color=SATURATION_COLOR, linewidth=0.5)
     ax.set_ylim(*ax.get_ylim())
     ax.fill_between(wl, sp_saturated, color=SATURATION_COLOR, linewidth=0, alpha=0.1)
     ax.set_ylim(top=data.shape[1] * data.shape[2])
-    ax.set_ylabel('Number of fully saturated/invalid pixels')
+    ax.set_ylabel('Invalid or fully saturated pixels')
     ax.spines['right'].set_color(SATURATION_COLOR)
     ax.yaxis.label.set_color(SATURATION_COLOR)
     ax.tick_params(axis='y', colors=SATURATION_COLOR)
@@ -374,7 +399,7 @@ def make_summary_plot(
             ax_data.set_ylabel(
                 f'IFU plane\n{"median" if instrument == "NIRSPEC" else "summed"} data'
             )
-            ax_sat.set_ylabel('% saturated')
+            ax_sat.set_ylabel('% Invalid\nor saturated')
 
     fig.tight_layout()
     if show:
