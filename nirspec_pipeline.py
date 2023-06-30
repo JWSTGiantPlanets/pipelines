@@ -430,7 +430,7 @@ def run_pipeline(
         run_stage3(group_root_paths, stage3_kwargs, reduction_parallel_kwargs)
 
     if 'navigate' not in skip_steps:
-        run_navigation(group_root_paths, basic_navigation, navigate_kwargs)
+        run_navigate(group_root_paths, basic_navigation, navigate_kwargs)
 
     if desaturate and 'desaturate' not in skip_steps:
         run_desaturate(root_path, group_root_paths, desaturate_kwargs, parallel_kwargs)
@@ -664,7 +664,7 @@ def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
 
 
 # navigation
-def run_navigation(
+def run_navigate(
     group_root_paths: list[str],
     basic_navigation: bool = False,
     navigate_kwargs: dict[str, Any] | None = None,

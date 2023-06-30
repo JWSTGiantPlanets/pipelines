@@ -108,6 +108,7 @@ def navigate_file(
     ra_offset: float = RA_OFFSET,
     dec_offset: float = DEC_OFFSET,
     basic: bool = False,
+    rename_directory: bool = True,
 ) -> datetime.datetime:
     path = os.path.abspath(path)
 
@@ -162,16 +163,17 @@ def navigate_file(
             header['DATE-END'], '%Y-%m-%dT%H:%M:%S.%f'
         )
 
-        path_out = make_output_path(path)
+        path_out = make_output_path(path, rename_directory)
         check_path(path_out)
         hdul.writeto(path_out, overwrite=True)
     return date_end
 
 
-def make_output_path(path: str) -> str:
+def make_output_path(path: str, rename_directory: bool) -> str:
     directory_path, filename = os.path.split(path)
     root, directory = os.path.split(directory_path)
-    directory = directory + '_nav'
+    if rename_directory:
+        directory = directory + '_nav'
     filename = filename.replace('.fits', '_nav.fits')
     return os.path.join(root, directory, filename)
 
