@@ -750,7 +750,6 @@ def despike_fn(args: tuple[str, str, dict[str, Any]]) -> None:
 # background
 def run_background(
     root_path: str,
-    defringe_options: list[bool],
     background_path: str,
     background_kwargs: dict[str, Any] | None = None,
 ) -> None:
