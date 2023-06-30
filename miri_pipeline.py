@@ -688,17 +688,32 @@ def run_stage3(
         for root_path in group_root_paths:
             log(f'Running reduction stage 3 for defringe={defringe}, {root_path!r}')
             grouped_files = group_stage2_files_for_stage3(root_path, defringe)
+
+            # Only need to include the tile in prodname if it is needed to avoid filename
+            # collisions for observations which use mosaicing. Most observations just have a
+            # single tile per datset, so we can just use the standard prodname in this case
+            keys_with_tiles = set(grouped_files.keys())
+            keys_without_tiles = set(
+                (dither, channel, band)
+                for dither, tile, channel, band in keys_with_tiles
+            )
+            include_tile_in_prodname = len(keys_with_tiles) != len(keys_without_tiles)
+
             asn_paths_list: list[tuple[str, str]] = []
-            for (dither, channel, band), paths in grouped_files.items():
+            for (dither, tile, channel, band), paths in grouped_files.items():
                 dirname = 'combined' if dither is None else f'd{dither}'
                 if defringe:
                     dirname += '_fringe'
                 output_dir = os.path.join(root_path, 'stage3', dirname)
                 check_path(output_dir)
                 asn_path = os.path.join(
-                    output_dir, f'l3asn-{channel}_{band}_dither-{dither}.json'
+                    output_dir, f'l3asn-{tile}_{channel}_{band}_dither-{dither}.json'
                 )
-                write_asn_for_stage3(paths, asn_path, prodname=f'Level3')
+                write_asn_for_stage3(
+                    paths,
+                    asn_path,
+                    prodname='Level3' + f'_{tile}' if include_tile_in_prodname else '',
+                )
                 asn_paths_list.append((asn_path, output_dir))
             args_list = [
                 (p, output_dir, kwargs) for p, output_dir in sorted(asn_paths_list)
@@ -716,23 +731,24 @@ def run_stage3(
 def group_stage2_files_for_stage3(
     root_path: str,
     defringe: bool,
-) -> dict[tuple[int | None, str, str], list[str]]:
-    out: dict[tuple[int | None, str, str], list[str]] = {}
+) -> dict[tuple[int | None, str, str, str], list[str]]:
+    out: dict[tuple[int | None, str, str, str], list[str]] = {}
     suffix = 'residual_fringe.fits' if defringe else 'cal.fits'
     paths_in = sorted(glob.glob(os.path.join(root_path, 'stage2', f'*{suffix}')))
     for p in paths_in:
         with fits.open(p) as hdul:
             hdr = hdul[0].header  #  type: ignore
         dither = int(hdr['PATT_NUM'])
+        tile = hdr['ACT_ID']
         channel = hdr['CHANNEL']
         band = hdr['BAND']
 
         # Keep dithers separate
-        k = (dither, channel, band)
+        k = (dither, tile, channel, band)
         out.setdefault(k, []).append(p)
 
         # Combine dithers
-        k = (None, channel, band)
+        k = (None, tile, channel, band)
         out.setdefault(k, []).append(p)
     return out
 

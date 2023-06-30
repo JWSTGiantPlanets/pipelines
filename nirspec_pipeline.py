@@ -550,6 +550,17 @@ def run_stage3(
             log(f'Running reduction stage 3 for {root_path!r}')
 
         grouped_files = group_stage2_files_for_stage3(root_path)
+
+        # Only need to include the tile in prodname if it is needed to avoid filename
+        # collisions for observations which use mosaicing. Most observations just have a
+        # single tile per datset, so we can just use the standard prodname in this case
+        keys_with_tiles = set(grouped_files.keys())
+        keys_without_tiles = set(
+            (dither, filter_, grating)
+            for dither, tile, filter_, grating in keys_with_tiles
+        )
+        include_tile_in_prodname = len(keys_with_tiles) != len(keys_without_tiles)
+
         asn_paths_list: list[tuple[str, str]] = []
         for (dither, tile, filter_, grating), paths in grouped_files.items():
             dirname = 'combined' if dither is None else f'd{dither}'
@@ -558,7 +569,11 @@ def run_stage3(
             asn_path = os.path.join(
                 output_dir, f'l3asn-{tile}_{filter_}_{grating}_dither-{dither}.json'
             )
-            write_asn_for_stage3(paths, asn_path, prodname=f'Level3_{tile}')
+            write_asn_for_stage3(
+                paths,
+                asn_path,
+                prodname='Level3' + f'_{tile}' if include_tile_in_prodname else '',
+            )
             asn_paths_list.append((asn_path, output_dir))
         args_list = [
             (p, output_dir, kwargs) for p, output_dir in sorted(asn_paths_list)
