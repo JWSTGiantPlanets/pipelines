@@ -708,7 +708,7 @@ def run_stage3(
                 output_dir = os.path.join(root_path, 'stage3', dirname)
                 check_path(output_dir)
                 asn_path = os.path.join(
-                    output_dir, f'l3asn-{tile}_{channel}_{band}_dither-{dither}.json'
+                    output_dir, f'l3asn-{tile}_{channel}_{band}_dither-{dirname}.json'
                 )
                 write_asn_for_stage3(
                     paths,
