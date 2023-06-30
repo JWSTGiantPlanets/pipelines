@@ -266,7 +266,7 @@ DEFAULT_STAGE1_KWARGS = {}
 DEFAULT_STAGE2_KWARGS = {
     'steps': {'cube_build': {'skip': True}, 'extract_1d': {'skip': True}}
 }
-DEFAULT_DEFRINGE_KWARGS = {}
+DEFAULT_DEFRINGE_KWARGS = {'skip': False}
 DEFAULT_STAGE3_KWARGS = {
     'steps': {
         'master_background': {'skip': True},
