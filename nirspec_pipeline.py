@@ -59,7 +59,7 @@ This will run the full pipeline, and output data files appropriate directories (
 `/data/uranus/lon1/stage3`, `/data/uranus/lon1/plots` etc.).
 
 If the pipeline is run with desaturation enabled, the pipeline flow is:
-- Firstly, multiple versions of the stage0 cubes are greated with different numbers of 
+- Firstly, multiple versions of the stage0 cubes are created with different numbers of 
   groups (the `remove_groups` step).
 - `stage1` is run on e.g. the 4 group data, then the 3 group data, then the 2 group
   data, then the 1 group data. Then `stage2` is run on the 4-1 group data, then 

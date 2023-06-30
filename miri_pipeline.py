@@ -59,12 +59,12 @@ This will run the full pipeline, and output data files appropriate directories (
 `/data/uranus/lon1/stage3`, `/data/uranus/lon1/plots` etc.).
 
 By default, most steps of the pipeline are effectively run twice, each step with the 
-redisdual defringe step disabled first, then with it enabled. If you only want defringed
+residual defringe step disabled first, then with it enabled. If you only want defringed
 or non-defringed data, you can customise this behaviour with the `defringe` argument or 
 the `--defringe` or `--no-defringe` flags.
 
 If the pipeline is run with desaturation enabled, the pipeline flow is:
-- Firstly, multiple versions of the stage0 cubes are greated with different numbers of 
+- Firstly, multiple versions of the stage0 cubes are created with different numbers of 
   groups (the `remove_groups` step).
 - `stage1` is run on e.g. the 4 group data, then the 3 group data, then the 2 group
   data, then the 1 group data. Then `stage2` is run on the 4-1 group data, then 
@@ -138,7 +138,7 @@ STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
 - `stage1`: Run the standard JWST reduction pipeline stage 1.
 - `stage2`: Run the standard JWST reduction pipeline stage 2.
-- `defringe`: Run thhe JWST reduction pipeline residual fringe step [optional].
+- `defringe`: Run the JWST reduction pipeline residual fringe step [optional].
 - `stage3`: Run the standard JWST reduction pipeline stage 3.
 - `navigate`: Navigate reduced files.
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
@@ -683,7 +683,6 @@ def run_stage3(
     kwargs = DEFAULT_STAGE3_KWARGS | (stage3_kwargs or {})
     log(f'Arguments: {kwargs!r}', time=False)
 
-    # TODO only include tile in prodname if needed
     for defringe in defringe_options:
         for root_path in group_root_paths:
             log(f'Running reduction stage 3 for defringe={defringe}, {root_path!r}')
@@ -933,7 +932,7 @@ def run_background(
     log(f'Arguments: {kwargs!r}', time=False)
 
     for defringe in defringe_options:
-        log(f'Runnning background subtraction for defringe={defringe!r}')
+        log(f'Running background subtraction for defringe={defringe!r}')
         paths_in = sorted(
             filter_paths_by_defringe(
                 glob.glob(
