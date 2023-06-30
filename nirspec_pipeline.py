@@ -7,6 +7,8 @@ visualisation.
 
 See STEP_DESCRIPTIONS below for a description of each step in this pipeline.
 
+GitHub repository: https://github.com/JWSTGiantPlanets/pipelines
+
 
 Setup
 =====
@@ -229,7 +231,7 @@ DEFAULT_STAGE3_KWARGS = {
     'steps': {'cube_build': {'coord_system': 'ifualign'}, 'extract_1d': {'skip': True}}
 }
 DEFAULT_DESATURATE_KWARGS = {}
-DEFAULT_NAVIGATION_KWARGS = {}
+DEFAULT_NAVIGATE_KWARGS = {}
 DEFAULT_DESPIKE_KWARGS = {}
 DEFAULT_PLOT_KWARGS = {}
 DEFAULT_ANIMATE_KWARGS = {}
@@ -249,7 +251,7 @@ def run_pipeline(
     stage2_kwargs: dict[str, Any] | None = None,
     stage3_kwargs: dict[str, Any] | None = None,
     desaturate_kwargs: dict[str, Any] | None = None,
-    navigation_kwargs: dict[str, Any] | None = None,
+    navigate_kwargs: dict[str, Any] | None = None,
     despike_kwargs: dict[str, Any] | None = None,
     plot_kwargs: dict[str, Any] | None = None,
     animate_kwargs: dict[str, Any] | None = None,
@@ -320,11 +322,11 @@ def run_pipeline(
             `skip_steps`.
 
         stage1_kwargs, stage2_kwargs, stage3_kwargs, desaturate_kwargs,
-        navigation_kwargs, despike_kwargs, plot_kwargs, animate_kwargs: Dictionaries of
-            arguments passed to the corresponding functions for each step of the
-            pipeline. These can therefore be used to override the default values for
-            each step. See the documentation for each function for details on the
-            arguments. See the constants (e.g. DEFAULT_STAGE1_KWARGS) above for the
+        navigate_kwargs, despike_kwargs, plot_kwargs, animate_kwargs:
+            Dictionaries of arguments passed to the corresponding functions for each
+            step of the pipeline. These can therefore be used to override the default
+            values for each step. See the documentation for each function for details on
+            the arguments. See the constants (e.g. DEFAULT_STAGE1_KWARGS) above for the
             default values.
     """
     # Process args
@@ -345,6 +347,7 @@ def run_pipeline(
         | (reduction_parallel_kwargs or {})
     )
 
+    # Process skip steps
     if skip_steps is None:
         skip_steps = []
     for s in skip_steps:
@@ -367,6 +370,7 @@ def run_pipeline(
     # Standardise file paths
     root_path = os.path.expandvars(os.path.expanduser(root_path))
 
+    # Print info
     log('Running NIRSpec pipeline')
     log(f'Root path: {root_path!r}', time=False)
     if skip_steps:
@@ -400,7 +404,7 @@ def run_pipeline(
         run_stage3(group_root_paths, stage3_kwargs, reduction_parallel_kwargs)
 
     if 'navigate' not in skip_steps:
-        run_navigation(group_root_paths, basic_navigation, navigation_kwargs)
+        run_navigation(group_root_paths, basic_navigation, navigate_kwargs)
 
     if desaturate and 'desaturate' not in skip_steps:
         run_desaturate(root_path, group_root_paths, desaturate_kwargs, parallel_kwargs)
@@ -419,7 +423,7 @@ def run_pipeline(
     if 'animate' not in skip_steps:
         run_animate(root_path, animate_kwargs, parallel_kwargs)
 
-    log('NIRSpec pipeline complete')
+    log('NIRSpec pipeline completed with')
     log(f'Root path: {root_path!r}', time=False)
     log(f'Desaturate: {desaturate!r}', time=False)
     if skip_steps:
@@ -427,7 +431,7 @@ def run_pipeline(
             f'Skipped steps: {", ".join([repr(s) for s in STEPS if s in skip_steps])}',
             time=False,
         )
-    print()
+    log('ALL DONE')
 
 
 # remove groups
@@ -540,6 +544,7 @@ def run_stage3(
     kwargs = DEFAULT_STAGE3_KWARGS | (stage3_kwargs or {})
     log(f'Arguments: {kwargs!r}', time=False)
 
+    # TODO only include tile in prodname if needed
     for root_path in group_root_paths:
         if len(group_root_paths) > 1:
             log(f'Running reduction stage 3 for {root_path!r}')
@@ -619,10 +624,10 @@ def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
 def run_navigation(
     group_root_paths: list[str],
     basic_navigation: bool = False,
-    navigation_kwargs: dict[str, Any] | None = None,
+    navigate_kwargs: dict[str, Any] | None = None,
 ) -> None:
-    log('Running navigation')
-    kwargs = DEFAULT_NAVIGATION_KWARGS | (navigation_kwargs or {})
+    log('Running navigate')
+    kwargs = DEFAULT_NAVIGATE_KWARGS | (navigate_kwargs or {})
     log(f'Basic navigation: {basic_navigation!r}', time=False)
     log(f'Arguments: {kwargs!r}', time=False)
     navigate_jwst_observations.load_kernels()
@@ -635,18 +640,18 @@ def run_navigation(
         navigate_jwst_observations.navigate_multiple(
             *paths_in, basic=basic_navigation, **kwargs
         )
-    log('Navigation step complete\n')
+    log('Navigate step complete\n')
 
 
-# desaturation
+# desaturate
 def run_desaturate(
     root_path: str,
     group_root_paths: list[str],
-    desaturation_kwargs: dict[str, Any] | None = None,
+    desaturate_kwargs: dict[str, Any] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
     log('Running desaturate')
-    kwargs = DEFAULT_DESATURATE_KWARGS | (desaturation_kwargs or {})
+    kwargs = DEFAULT_DESATURATE_KWARGS | (desaturate_kwargs or {})
     parallel_kwargs = parallel_kwargs or {}
     log(f'Arguments: {kwargs!r}', time=False)
 
@@ -662,11 +667,11 @@ def run_desaturate(
             paths_dict.setdefault(p_out, []).append(p_in)
     args_list = [(paths_in, p_out, kwargs) for p_out, paths_in in paths_dict.items()]
     log(f'Processing {len(args_list)} output files...', time=False)
-    runmany(desaturation_fn, args_list, desc='desaturate', **parallel_kwargs)
+    runmany(desaturate_fn, args_list, desc='desaturate', **parallel_kwargs)
     log('Desaturate step complete\n')
 
 
-def desaturation_fn(args: tuple[list[str], str, dict[str, Any]]) -> None:
+def desaturate_fn(args: tuple[list[str], str, dict[str, Any]]) -> None:
     paths_in, path_out, kwargs = args
     desaturate_data.replace_saturated(paths_in, path_out, **kwargs)
 
@@ -708,15 +713,15 @@ def run_plot(
     plot_kwargs: dict[str, Any] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
-    log('Generating quick look plots')
+    log('Running plot')
     kwargs = DEFAULT_PLOT_KWARGS | (plot_kwargs or {})
     parallel_kwargs = parallel_kwargs or {}
     log(f'Arguments: {kwargs!r}', time=False)
     for root_path in group_root_paths:
         if len(group_root_paths) > 1:
-            log(f'Generating plots for {root_path!r}')
+            log(f'Generating quick look plots for {root_path!r}')
         for stage in reversed(DATA_STAGES):
-            log(f'Generating plots for stage {stage!r}')
+            log(f'Generating quick look plots for stage {stage!r}')
             paths_in = sorted(
                 glob.glob(os.path.join(root_path, stage, '*_nav', '*_nav.fits'))
             )
@@ -746,14 +751,14 @@ def run_animate(
     animate_kwargs: dict[str, Any] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
 ) -> None:
-    log('Generating quick look animations')
+    log('Running animate')
     kwargs = DEFAULT_ANIMATE_KWARGS | (animate_kwargs or {})
     parallel_kwargs = parallel_kwargs or {}
     if parallel_kwargs.get('parallel_frac', False):
         kwargs.setdefault('progress_bar', False)
     log(f'Arguments: {kwargs!r}', time=False)
     for stage in reversed(DATA_STAGES):
-        log(f'Generating animations for stage {stage!r}')
+        log(f'Generating quick look animations for stage {stage!r}')
         paths_in = sorted(
             glob.glob(os.path.join(root_path, stage, 'd*_nav', '*_nav.fits'))
         )
