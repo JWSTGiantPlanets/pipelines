@@ -88,7 +88,7 @@ def make_summary_plot(
     show: bool = False,
     vmin_percentile: float = 0,
     vmax_percentile: float = 100,
-    plot_brightest_spectrum: bool = True,
+    plot_brightest_spectrum: bool = False,
 ):
     """
     Create and save a summary plot of a JWST observation.
@@ -111,6 +111,8 @@ def make_summary_plot(
             `'.png'` in the input path. If the output directory does not exist, it will
             automatically be created.
         show: Toggle to optionally show the plot instead of saving it.
+        plot_brightness_spectrum: Toggle to optionally plot the spectrum of the brightest
+            10% of spaxels in the cube in addition to the average spectrum.
     """
     fig = plt.figure(figsize=(10, 10), dpi=200)
 

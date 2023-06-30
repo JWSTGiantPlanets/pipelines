@@ -175,7 +175,7 @@ python3 miri_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
 python3 miri_pipeline.py /data/uranus/lon1 --start_step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
-python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "animation": {"radius_factor": 2.5}}'
+python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}, "animation": {"radius_factor": 2.5}}'
 """
 
 import argparse
@@ -343,6 +343,7 @@ def run_pipeline(
             stage3_kwargs={
                 'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}
             },
+            plot_kwargs={'plot_brightest_spectrum': True},
             animation_kwargs={'radius_factor': 2.5},
         )
 
