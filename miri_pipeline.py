@@ -163,7 +163,7 @@ python3 miri_pipeline.py /data/uranus/lon1 --no-desaturate
 python3 miri_pipeline.py /data/uranus/lon1 --defringe
 
 # Run the pipeline, including background subtraction
-python3 miri_pipeline.py /data/uranus/lon1 --background_path /data/saturn/SATURN-BACKGROUND
+python3 miri_pipeline.py /data/uranus/lon1 --background_path /data/uranus/background
 
 # Run the pipeline, but stop before creating any visualisations
 python3 miri_pipeline.py /data/uranus/lon1 --end_step despike
@@ -394,7 +394,8 @@ def run_pipeline(
             `skip_steps`.
 
         stage1_kwargs, stage2_kwargs, defringe_kwargs, stage3_kwargs, desaturate_kwargs,
-        navigate_kwargs, flat_kwargs, despike_kwargs, plot_kwargs, animate_kwargs:
+        navigate_kwargs, flat_kwargs, despike_kwargs, background_kwargs, plot_kwargs,
+        animate_kwargs:
             Dictionaries of arguments passed to the corresponding functions for each
             step of the pipeline. These can therefore be used to override the default
             values for each step. See the documentation for each function for details on
@@ -954,8 +955,8 @@ def run_background(
                 'd{dither}{fringe}_nav',
                 'Level3_ch{channel}-{band}_s3d_nav.fits',
             ).format(
-                channel=hdr['CHANNEL'],
-                band=hdr['BAND'],
+                channel=hdr['CHANNEL'].lower(),
+                band=hdr['BAND'].lower(),
                 fringe='_fringe' if defringe else '',
                 dither='1',
             )

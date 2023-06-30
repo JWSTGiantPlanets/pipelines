@@ -136,6 +136,7 @@ STEP_DESCRIPTIONS = """
 - `navigate`: Navigate reduced files.
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
 - `despike`: Clean cubes by removing extreme outlier pixels.
+- `background`: Subtract background from cubes [optional].
 - `plot`: Generate quick look summary plots of data.
 - `animate`: Generate summary animations of data.
 """
@@ -155,6 +156,9 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --parallel 0.5
 
 # Run the full pipeline, without any desaturation
 python3 nirspec_pipeline.py /data/uranus/lon1 --no-desaturate
+
+# Run the pipeline, including background subtraction
+python3 nirspec_pipeline.py /data/uranus/lon1 --background_path /data/uranus/background
 
 # Run the pipeline, but stop before creating any visualisations
 python3 nirspec_pipeline.py /data/uranus/lon1 --end_step despike
@@ -182,6 +186,7 @@ from jwst.associations.asn_from_list import asn_from_list
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
 
+import background_subtraction
 import desaturate_data
 import despike_data
 import jwst_summary_animation
@@ -199,6 +204,7 @@ Step: TypeAlias = Literal[
     'navigate',
     'desaturate',
     'despike',
+    'background',
     'plot',
     'animate',
 ]
@@ -210,6 +216,7 @@ STEPS: list[Step] = [
     'navigate',
     'desaturate',
     'despike',
+    'background',
     'plot',
     'animate',
 ]
@@ -218,6 +225,7 @@ DATA_STAGES = [
     'stage3',
     'stage3_desaturated',
     'stage4_despike',
+    'stage5_background',
 ]
 
 # Default arguments for each step. These are merged with the user-supplied kwargs
@@ -233,6 +241,7 @@ DEFAULT_STAGE3_KWARGS = {
 DEFAULT_DESATURATE_KWARGS = {}
 DEFAULT_NAVIGATE_KWARGS = {}
 DEFAULT_DESPIKE_KWARGS = {}
+DEFAULT_BACKGROUND_KWARGS = {}
 DEFAULT_PLOT_KWARGS = {}
 DEFAULT_ANIMATE_KWARGS = {}
 
@@ -242,6 +251,7 @@ def run_pipeline(
     *,
     desaturate: bool = True,
     groups_to_use: list[int] | None = None,
+    background_path: str | None = None,
     parallel: float | bool = False,
     basic_navigation: bool = False,
     skip_steps: list[Step] | set[Step] | None = None,
@@ -253,6 +263,7 @@ def run_pipeline(
     desaturate_kwargs: dict[str, Any] | None = None,
     navigate_kwargs: dict[str, Any] | None = None,
     despike_kwargs: dict[str, Any] | None = None,
+    background_kwargs: dict[str, Any] | None = None,
     plot_kwargs: dict[str, Any] | None = None,
     animate_kwargs: dict[str, Any] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
@@ -275,6 +286,12 @@ def run_pipeline(
 
         # Run the full pipeline, without any desaturation
         run_pipeline('/data/uranus/lon1', desaturate=False)
+
+        # Run the pipeline, including background subtraction
+        run_pipeline(
+            '/data/uranus/lon1',
+            background_path='data/uranus/background',
+        )
 
         # Run the pipeline, but stop before creating any visualisations
         run_pipeline('/data/uranus/lon1', end_step='despike')
@@ -308,6 +325,12 @@ def run_pipeline(
             this is `None` (the default), then all available groups will be used. If
             `desaturate` is False, then this argument will be ignored. The data with all
             groups will always be included.
+        background_path: Path to directory containing background data. For example, if
+            your `root_path` is `/data/uranus/lon1`, the `background_path` may
+            be `/data/uranus/background`. Note that background subtraction will
+            require the background data to be already reduced. If no `background_path`
+            is specified (the default), then no background subtraction will be
+            performed.
         basic_navigation: Toggle between basic or full navigation. If True, then only
             RA and Dec navigation backplanes are generated (e.g. useful for small
             bodies). If False (the default), then full navigation is performed,
@@ -322,7 +345,7 @@ def run_pipeline(
             `skip_steps`.
 
         stage1_kwargs, stage2_kwargs, stage3_kwargs, desaturate_kwargs,
-        navigate_kwargs, despike_kwargs, plot_kwargs, animate_kwargs:
+        navigate_kwargs, despike_kwargs, background_kwargs, plot_kwargs, animate_kwargs:
             Dictionaries of arguments passed to the corresponding functions for each
             step of the pipeline. These can therefore be used to override the default
             values for each step. See the documentation for each function for details on
@@ -416,6 +439,9 @@ def run_pipeline(
             parallel_kwargs,
             input_stage='stage3_desaturated' if desaturate else 'stage3',
         )
+
+    if background_path is not None and 'background' not in skip_steps:
+        run_background(root_path, background_path, background_kwargs)
 
     if 'plot' not in skip_steps:
         run_plot(group_root_paths, plot_kwargs, parallel_kwargs)
@@ -544,7 +570,6 @@ def run_stage3(
     kwargs = DEFAULT_STAGE3_KWARGS | (stage3_kwargs or {})
     log(f'Arguments: {kwargs!r}', time=False)
 
-    # TODO only include tile in prodname if needed
     for root_path in group_root_paths:
         if len(group_root_paths) > 1:
             log(f'Running reduction stage 3 for {root_path!r}')
@@ -722,6 +747,41 @@ def despike_fn(args: tuple[str, str, dict[str, Any]]) -> None:
     despike_data.despike_cube(p_in, p_out, **kwargs)
 
 
+# background
+def run_background(
+    root_path: str,
+    defringe_options: list[bool],
+    background_path: str,
+    background_kwargs: dict[str, Any] | None = None,
+) -> None:
+    log('Running background')
+    kwargs = DEFAULT_BACKGROUND_KWARGS | (background_kwargs or {})
+    log(f'Arguments: {kwargs!r}', time=False)
+
+    paths_in = sorted(
+        glob.glob(os.path.join(root_path, 'stage4_despike', '*_nav', '*_nav.fits'))
+    )
+    log(f'Processing {len(paths_in)} input files...', time=False)
+    for p_in in tqdm.tqdm(paths_in, desc='background'):
+        p_out = replace_path_part(
+            p_in, -3, 'stage5_background', check_old='stage4_despike'
+        )
+        with fits.open(p_in) as hdul:
+            hdr = hdul['PRIMARY'].header  #  type: ignore
+        p_background = os.path.join(
+            background_path,
+            'stage4_despike',
+            'd{dither}_nav',
+            'Level3_{grating}-{filter}_s3d_nav.fits',
+        ).format(
+            grating=hdr['GRATING'].lower(),
+            filter=hdr['FILTER'].lower(),
+            dither='1',
+        )
+        background_subtraction.subtract_background(p_in, p_out, p_background, **kwargs)
+    log('Background step complete\n')
+
+
 # plot
 def run_plot(
     group_root_paths: list[str],
@@ -889,6 +949,16 @@ def main():
         type=str,
         help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will
             keep the first four groups. If unspecified, all groups will be kept.""",
+    )
+    parser.add_argument(
+        '--background_path',
+        type=str,
+        help="""Path to directory containing background data. For example, if
+            your `root_path` is `/data/uranus/lon1`, the `background_path` may
+            be `/data/uranus/background`. Note that background subtraction will
+            require the background data to be already reduced. If no `background_path`
+            is specified (the default), then no background subtraction will be 
+            performed.""",
     )
     parser.add_argument(
         '--basic_navigation',
