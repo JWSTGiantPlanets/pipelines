@@ -866,7 +866,7 @@ def run_flat(
         log(f'Running flat for defringe={defringe!r}')
         paths_in = sorted(
             filter_paths_by_defringe(
-                glob.glob(os.path.join(root_path, input_stage, '*_nav', '*_nav.fits')),
+                glob.glob(os.path.join(root_path, input_stage, 'd*_nav', '*_nav.fits')),
                 defringe,
             )
         )
@@ -877,7 +877,7 @@ def run_flat(
                 hdr = hdul['PRIMARY'].header  #  type: ignore
             p_flat = flat_data_path.format(
                 channel=hdr['CHANNEL'],
-                band=hdr['BAND'],
+                band=hdr['BAND'].lower(),
                 fringe='_fringe' if defringe else '',
             )
             flat_field.apply_flat(p_in, p_out, p_flat, **kwargs)
@@ -957,7 +957,7 @@ def run_background(
                 'd{dither}{fringe}_nav',
                 'Level3_ch{channel}-{band}_s3d_nav.fits',
             ).format(
-                channel=hdr['CHANNEL'].lower(),
+                channel=hdr['CHANNEL'],
                 band=hdr['BAND'].lower(),
                 fringe='_fringe' if defringe else '',
                 dither='1',

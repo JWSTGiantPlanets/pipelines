@@ -759,7 +759,7 @@ def run_background(
     log(f'Arguments: {kwargs!r}', time=False)
 
     paths_in = sorted(
-        glob.glob(os.path.join(root_path, 'stage4_despike', '*_nav', '*_nav.fits'))
+        glob.glob(os.path.join(root_path, 'stage4_despike', 'd*_nav', '*_nav.fits'))
     )
     log(f'Processing {len(paths_in)} input files...', time=False)
     for p_in in tqdm.tqdm(paths_in, desc='background'):
