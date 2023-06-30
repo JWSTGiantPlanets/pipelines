@@ -177,7 +177,8 @@ python3 miri_pipeline.py /data/uranus/lon1 --start_step desaturate
 # Run the pipeline, passing custom arguments to different steps
 python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}, "animation": {"radius_factor": 2.5}}'
 """
-
+# TODO shift bg subtraction to stage2 and create versions with and withouth bg
+# subtraction (like defringe)?
 import argparse
 import glob
 import json

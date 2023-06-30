@@ -393,6 +393,8 @@ def run_pipeline(
 
     # Standardise file paths
     root_path = os.path.expandvars(os.path.expanduser(root_path))
+    if background_path is not None:
+        background_path = os.path.expandvars(os.path.expanduser(background_path))
 
     # Print info
     log('Running NIRSpec pipeline')
