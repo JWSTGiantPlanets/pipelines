@@ -597,7 +597,7 @@ def run_stage3(
             write_asn_for_stage3(
                 paths,
                 asn_path,
-                prodname='Level3' + f'_{tile}' if include_tile_in_prodname else '',
+                prodname='Level3' + (f'_{tile}' if include_tile_in_prodname else ''),
             )
             asn_paths_list.append((asn_path, output_dir))
         args_list = [

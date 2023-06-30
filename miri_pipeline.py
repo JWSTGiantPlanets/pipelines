@@ -686,7 +686,7 @@ def run_stage3(
 
     for defringe in defringe_options:
         for root_path in group_root_paths:
-            log(f'Running reduction stage 3 for defringe={defringe}, {root_path!r}')
+            log(f'Running reduction stage 3 for defringe={defringe} on {root_path!r}')
             grouped_files = group_stage2_files_for_stage3(root_path, defringe)
 
             # Only need to include the tile in prodname if it is needed to avoid filename
@@ -712,7 +712,8 @@ def run_stage3(
                 write_asn_for_stage3(
                     paths,
                     asn_path,
-                    prodname='Level3' + f'_{tile}' if include_tile_in_prodname else '',
+                    prodname='Level3'
+                    + (f'_{tile}' if include_tile_in_prodname else ''),
                 )
                 asn_paths_list.append((asn_path, output_dir))
             args_list = [
@@ -791,7 +792,7 @@ def run_navigate(
     navigate_jwst_observations.load_kernels()
     for defringe in defringe_options:
         for root_path in group_root_paths:
-            log(f'Running navigation for defringe={defringe}, {root_path!r}')
+            log(f'Running navigation for defringe={defringe} on {root_path!r}')
             paths_in = sorted(
                 filter_paths_by_defringe(
                     glob.glob(os.path.join(root_path, 'stage3', '*', '*_s3d.fits')),
@@ -864,7 +865,7 @@ def run_flat(
         log(f'Running flat for defringe={defringe!r}')
         paths_in = sorted(
             filter_paths_by_defringe(
-                glob.glob(os.path.join(root_path, input_stage, '*_nav.fits')),
+                glob.glob(os.path.join(root_path, input_stage, '*_nav', '*_nav.fits')),
                 defringe,
             )
         )
@@ -980,7 +981,7 @@ def run_plot(
 
     for defringe in defringe_options:
         for root_path in group_root_paths:
-            log(f'Generating quick look plots for defringe={defringe}, {root_path!r}')
+            log(f'Generating quick look plots for defringe={defringe} on {root_path!r}')
             for stage in reversed(DATA_STAGES):
                 log(f'Generating quick look plots for stage {stage!r}')
                 paths_in = sorted(
