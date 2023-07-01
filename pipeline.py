@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import glob
+import itertools
 import json
 import os
 import pathlib
@@ -40,12 +41,74 @@ Step: TypeAlias = Literal[
     'animate',
 ]
 
+MIRI_STEPS = (
+    'remove_groups',
+    'stage1',
+    'stage2',
+    'defringe',
+    'stage3',
+    'navigate',
+    'desaturate',
+    'flat',
+    'despike',
+    'background',
+    'plot',
+    'animate',
+)
+MIRI_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
+    'stage2': {'steps': {'cube_build': {'skip': True}, 'extract_1d': {'skip': True}}},
+    'defringe': {'skip': False},
+    'stage3': {
+        'steps': {
+            'master_background': {'skip': True},
+            'extract_1d': {'skip': True},
+            'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
+        }
+    },
+}
+MIRI_STAGE_DIRECTORIES_TO_PLOT = (
+    'stage3',
+    'stage3_desaturated',
+    'stage4_flat',
+    'stage5_despike',
+    'stage6_background',
+)
+
+NIRSPEC_STEPS = (
+    'remove_groups',
+    'stage1',
+    'stage2',
+    'stage3',
+    'navigate',
+    'desaturate',
+    'despike',
+    'background',
+    'plot',
+    'animate',
+)
+NIRSPEC_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
+    'stage2': {
+        'steps': {
+            'cube_build': {'coord_system': 'ifualign'},
+            'extract_1d': {'skip': True},
+        }
+    },
+    'stage3': {
+        'steps': {
+            'cube_build': {'coord_system': 'ifualign'},
+            'extract_1d': {'skip': True},
+        }
+    },
+}
+NIRSPEC_STAGE_DIRECTORIES_TO_PLOT = (
+    'stage3',
+    'stage3_desaturated',
+    'stage4_despike',
+    'stage5_background',
+)
+
 
 class Pipeline:
-    STEPS: tuple[Step, ...] = ()  # override this in subclasses
-    DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {}  # override this in subclasses
-    DATA_STAGES: tuple[str, ...] = ()  # override this in subclasses
-
     def __init__(
         self,
         root_path: str,
@@ -88,11 +151,40 @@ class Pipeline:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.root_path!r})'
 
+    # Pipeline data to override in subclasses
     @property
     def instrument(self) -> str:
         raise NotImplementedError
 
-    # Pipeline running
+    @property
+    def steps(self) -> tuple[Step, ...]:
+        raise NotImplementedError
+
+    @property
+    def default_kwargs(self) -> dict[Step, dict[str, Any]]:
+        raise NotImplementedError
+
+    @property
+    def step_directories(self) -> dict[Step, tuple[str, str]]:
+        """
+        Dictionary containing input and output directories for each step.
+        """
+        return {
+            'remove_groups': ('stage0', 'stage0'),
+            'stage1': ('stage0', 'stage1'),
+            'stage2': ('stage1', 'stage2'),
+            'defringe': ('stage2', 'stage2'),
+            'stage3': ('stage2', 'stage3'),
+            'navigate': ('stage3', 'stage3'),
+            'desaturate': ('stage3', 'stage3_desaturated'),
+            # later steps overriden in subclasses
+        }
+
+    @property
+    def stage_directories_to_plot(self) -> tuple[str, ...]:
+        raise NotImplementedError
+
+    # Pipeline running methods
     def run(
         self,
         *,
@@ -105,7 +197,7 @@ class Pipeline:
         self.log(f'Running {self.instrument} pipeline')
         self.print_reduction_info(skip_steps)
         print()
-        for step in self.STEPS:
+        for step in self.steps:
             if step in skip_steps:
                 continue
             self.run_step(step)
@@ -117,7 +209,7 @@ class Pipeline:
     def run_step(self, step: Step) -> None:
         """Run pipeline step"""
         self.log(f'Running {step} step')
-        kwargs = self.DEFAULT_KWARGS.get(step, {}) | self.step_kwargs.get(step, {})
+        kwargs = self.default_kwargs.get(step, {}) | self.step_kwargs.get(step, {})
         if kwargs:
             self.log(f'Arguments: {kwargs!r}', time=False)
         skipped = getattr(self, f'run_{step}')(kwargs)
@@ -137,23 +229,29 @@ class Pipeline:
         if skip_steps is None:
             skip_steps = []
         for s in skip_steps:
-            if s not in self.STEPS:
+            if s not in self.steps:
                 raise ValueError(
-                    f'Invalid skip step: {s!r} (valid steps: {self.STEPS})'
+                    f'Invalid skip step: {s!r} (valid steps: {self.steps})'
                 )
         skip_steps = set(skip_steps)
         if start_step is not None:
-            if start_step not in self.STEPS:
+            if start_step not in self.steps:
                 raise ValueError(
-                    f'Invalid start step: {start_step!r} (valid steps: {self.STEPS})'
+                    f'Invalid start step: {start_step!r} (valid steps: {self.steps})'
                 )
-            skip_steps.update(self.STEPS[: self.STEPS.index(start_step)])
+            skip_steps.update(self.steps[: self.steps.index(start_step)])
         if end_step is not None:
-            if end_step not in self.STEPS:
+            if end_step not in self.steps:
                 raise ValueError(
-                    f'Invalid end step: {end_step!r} (valid steps: {self.STEPS})'
+                    f'Invalid end step: {end_step!r} (valid steps: {self.steps})'
                 )
-            skip_steps.update(self.STEPS[self.STEPS.index(end_step) + 1 :])
+            skip_steps.update(self.steps[self.steps.index(end_step) + 1 :])
+
+        # Add skip steps dependent on provided arguments
+        if not self.desaturate:
+            skip_steps.add('desaturate')
+        if self.background_path is None:
+            skip_steps.add('background')  # TODO update this if the bg step changes?
         if self.basic_navigation:
             skip_steps.add('animate')
         return skip_steps
@@ -163,7 +261,7 @@ class Pipeline:
         self.log(f'Root path: {self.root_path!r}', time=False)
         if skip_steps:
             self.log(
-                f'Skipping steps: {", ".join([repr(s) for s in self.STEPS if s in skip_steps])}',
+                f'Skipping steps: {", ".join([repr(s) for s in self.steps if s in skip_steps])}',
                 time=False,
             )
         else:
@@ -204,9 +302,12 @@ class Pipeline:
         prefix = datetime.datetime.now().strftime('%H:%M:%S') if time else ' ' * 8
         print(prefix, *messages, flush=True)
 
-    def get_paths(self, *path_parts: str) -> list[str]:
+    def get_paths(self, *path_parts: str, filter_variants: bool = False) -> list[str]:
         """Get a list of paths matching the given path parts."""
-        return sorted(glob.glob(os.path.join(self.root_path, *path_parts)))
+        paths = sorted(glob.glob(os.path.join(self.root_path, *path_parts)))
+        if filter_variants:
+            paths = self.filter_paths_for_data_variants(paths)
+        return paths
 
     @property
     def group_root_paths(self) -> list[str]:
@@ -239,25 +340,74 @@ class Pipeline:
             yield root_path
 
     @property
-    def data_variants(self) -> list[str]:
-        # TODO some sort of list of variants of the data e.g.
-        # '', _fringe, _bg, _bg_fringe
-        pass
+    def data_variants_individual(self) -> set[str]:
+        """
+        Possible data variants that are applied to the dithered folders.
 
-    def iterate_data_variants(self) -> Generator[str, Any, None]:
-        pass
+        E.g. if the individual data variants are {'bg', 'fringe'}, then the following
+        the dithered folders will be created:
+            - d1
+            - d1_bg
+            - d1_fringe
+            - d1_bg_fringe
+        etc.
+        """
+        return set()
+
+    @property
+    def data_variant_combinations(self) -> set[frozenset[str]]:
+        """
+        All possible combinations of data variants.
+        """
+        # Start off with empty set (i.e. no variants)
+        combinations: set[frozenset[str]] = {frozenset()}
+        for variant in self.data_variants_individual:
+            # For each variant, add it to each existing combination
+            combinations.update({c | {variant} for c in combinations})
+        return combinations
+
+    def test_path_for_data_variants(self, path: str) -> bool:
+        """
+        Test if the given path contains the valid data variants.
+
+        Args:
+            path: Path to test.
+
+        Returns:
+            True if the path contains the valid data variants, False otherwise.
+        """
+        dirname = pathlib.Path(path).parts[-2]
+        # dirnames are of format d1_bg_fringe, so split on _ to get variants and drop
+        # the first element (the dither number/combination). Use a set to ensure order
+        # doesn't matter
+        path_variants = frozenset(dirname.split('_')[1:])
+        return path_variants in self.data_variant_combinations
+
+    def filter_paths_for_data_variants(self, paths: list[str]) -> list[str]:
+        """
+        Filter a list of paths to only include those containing the valid data variants.
+
+        Args:
+            paths: List of paths to filter.
+
+        Returns:
+            Filtered list of paths.
+        """
+        return [p for p in paths if self.test_path_for_data_variants(p)]
 
     # Pipeline steps
     def run_remove_groups(self, kwargs: dict[str, Any]) -> None:
-        paths_in = self.get_paths('stage0', '*_uncal.fits')
+        dir_in, dir_out = self.step_directories['remove_groups']
+        paths_in = self.get_paths(dir_in, '*_uncal.fits')
         self.log(f'Processing {len(paths_in)} files...', time=False)
         for p in tqdm.tqdm(paths_in, desc='remove_groups'):
             remove_groups.remove_groups_from_file(p, self.groups_to_use)
 
     def run_stage1(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['remove_groups']
         for root_path in self.iterate_group_root_paths():
-            paths_in = self.get_paths('stage0', '*.fits')
-            output_dir = os.path.join(root_path, 'stage1')
+            paths_in = self.get_paths(dir_in, '*.fits')
+            output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             self.log(f'Output directory: {output_dir!r}', time=False)
             self.log(f'Processing {len(args_list)} files...', time=False)
@@ -277,9 +427,10 @@ class Pipeline:
         )
 
     def run_stage2(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['stage2']
         for root_path in self.iterate_group_root_paths():
-            paths_in = self.get_paths('stage1', '*rate.fits')
-            output_dir = os.path.join(root_path, 'stage2')
+            paths_in = self.get_paths(dir_in, '*rate.fits')
+            output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             self.log(f'Output directory: {output_dir!r}', time=False)
             self.log(f'Processing {len(args_list)} files...', time=False)
@@ -297,46 +448,42 @@ class Pipeline:
         Spec2Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
 
 
-class MIRIPipeline(Pipeline):
-    STEPS = (
-        'remove_groups',
-        'stage1',
-        'stage2',
-        'defringe',
-        'stage3',
-        'navigate',
-        'desaturate',
-        'flat',
-        'despike',
-        'background',
-        'plot',
-        'animate',
-    )
-    DEFAULT_KWARGS = {
-        'stage2': {
-            'steps': {'cube_build': {'skip': True}, 'extract_1d': {'skip': True}}
-        },
-        'defringe': {'skip': False},
-        'stage3': {
-            'steps': {
-                'master_background': {'skip': True},
-                'extract_1d': {'skip': True},
-                'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
-            }
-        },
-    }
-    DATA_STAGES = (
-        'stage3',
-        'stage3_desaturated',
-        'stage4_flat',
-        'stage5_despike',
-        'stage6_background',
-    )
-
+class MiriPipeline(Pipeline):
     @property
     def instrument(self) -> str:
         return 'MIRI'
 
+    @property
+    def steps(self) -> tuple[Step, ...]:
+        return MIRI_STEPS
+
+    @property
+    def default_kwargs(self) -> dict[Step, dict[str, Any]]:
+        return MIRI_DEFAULT_KWARGS
+
+    @property
+    def step_directories(self) -> dict[Step, tuple[str, str]]:
+        return super().step_directories | {}  # TODO
+
+    @property
+    def stage_directories_to_plot(self) -> tuple[str, ...]:
+        return MIRI_STAGE_DIRECTORIES_TO_PLOT
+
+    def process_skip_steps(
+        self,
+        skip_steps: Collection[Step] | None,
+        start_step: Step | None,
+        end_step: Step | None,
+    ) -> set[Step]:
+        skip_steps = super().process_skip_steps(skip_steps, start_step, end_step)
+        # TODO defringe stuff
+        return skip_steps
+
+    @property
+    def data_variants_individual(self) -> set[str]:
+        return super().data_variants_individual | {'fringe'}
+
+    # Step overrides
     @staticmethod
     def reduction_detector1_fn(args: tuple[str, str, dict[str, Any]]) -> None:
         path_in, output_dir, kwargs = args
@@ -375,44 +522,28 @@ class MIRIPipeline(Pipeline):
         )
 
 
-class NIRSpecPipeline(Pipeline):
-    STEPS = (
-        'remove_groups',
-        'stage1',
-        'stage2',
-        'stage3',
-        'navigate',
-        'desaturate',
-        'despike',
-        'background',
-        'plot',
-        'animate',
-    )
-    DEFAULT_KWARGS = {
-        'stage2': {
-            'steps': {
-                'cube_build': {'coord_system': 'ifualign'},
-                'extract_1d': {'skip': True},
-            }
-        },
-        'stage3': {
-            'steps': {
-                'cube_build': {'coord_system': 'ifualign'},
-                'extract_1d': {'skip': True},
-            }
-        },
-    }
-    DATA_STAGES = (
-        'stage3',
-        'stage3_desaturated',
-        'stage4_despike',
-        'stage5_background',
-    )
-
+class NirspecPipeline(Pipeline):
     @property
     def instrument(self) -> str:
         return 'NIRSpec'
 
+    @property
+    def steps(self) -> tuple[Step, ...]:
+        return NIRSPEC_STEPS
+
+    @property
+    def default_kwargs(self) -> dict[Step, dict[str, Any]]:
+        return NIRSPEC_DEFAULT_KWARGS
+
+    @property
+    def step_directories(self) -> dict[Step, tuple[str, str]]:
+        return super().step_directories | {}  # TODO
+
+    @property
+    def stage_directories_to_plot(self) -> tuple[str, ...]:
+        return NIRSPEC_STAGE_DIRECTORIES_TO_PLOT
+
+    # Step overrides
     @staticmethod
     def reduction_spec2_fn(args: tuple[str, str, dict[str, Any]]) -> None:
         try:
