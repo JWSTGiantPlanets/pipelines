@@ -56,6 +56,7 @@ def runmany(
         num_processors = get_max_processors(parallel_frac)
 
     if num_processors == 1:
+        log(f'Processing {len(args_list)} jobs serially...')
         for a in tqdm.tqdm(args_list, **tqdm_kw):
             function(a)
     else:

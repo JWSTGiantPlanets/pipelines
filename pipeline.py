@@ -151,7 +151,7 @@ class Pipeline:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.root_path!r})'
 
-    # Pipeline data to override in subclasses
+    # Pipeline data to override in subclasses ------------------------------------------
     @property
     def instrument(self) -> str:
         raise NotImplementedError
@@ -184,7 +184,7 @@ class Pipeline:
     def stage_directories_to_plot(self) -> tuple[str, ...]:
         raise NotImplementedError
 
-    # Pipeline running methods
+    # Pipeline running methods ---------------------------------------------------------
     def run(
         self,
         *,
@@ -212,9 +212,8 @@ class Pipeline:
         kwargs = self.default_kwargs.get(step, {}) | self.step_kwargs.get(step, {})
         if kwargs:
             self.log(f'Arguments: {kwargs!r}', time=False)
-        skipped = getattr(self, f'run_{step}')(kwargs)
-        if not skipped:
-            self.log(f'{step} step completed')
+        getattr(self, f'run_{step}')(kwargs)
+        self.log(f'{step} step completed')
 
     def process_skip_steps(
         self,
@@ -272,7 +271,20 @@ class Pipeline:
         if self.basic_navigation:
             self.log(f'Basic navigation: {self.basic_navigation!r}', time=False)
 
-    # Utility methods
+    # Utility methods ------------------------------------------------------------------
+    @staticmethod
+    def log(*messages: Any, time: bool = True) -> None:
+        """
+        Print a message with a timestamp.
+
+        Args:
+            *messages: Messages passed to `print()`.
+            time: Toggle showing the timestamp.
+        """
+        prefix = datetime.datetime.now().strftime('%H:%M:%S') if time else ' ' * 8
+        print(prefix, *messages, flush=True)
+
+    # path processing...
     @staticmethod
     @overload
     def standardise_path(path: str) -> str:
@@ -291,17 +303,48 @@ class Pipeline:
         return os.path.expandvars(os.path.expanduser(path))
 
     @staticmethod
-    def log(*messages: Any, time: bool = True) -> None:
+    def replace_path_part(
+        path: str, idx: int, new: str, *, old: str | None = None
+    ) -> str:
         """
-        Print a message with a timestamp.
+        Replace a part of a path with a new value.
 
         Args:
-            *messages: Messages passed to `print()`.
-            time: Toggle showing the timestamp.
-        """
-        prefix = datetime.datetime.now().strftime('%H:%M:%S') if time else ' ' * 8
-        print(prefix, *messages, flush=True)
+            path: The path to modify.
+            idx: The index of the part to replace in the directory tree.
+            new: The new value to use.
+            old: If not None, check that the value at the index is this value before
+                replacing it.
 
+        Returns:
+            The modified path.
+        """
+        p = pathlib.Path(path)
+        parts = list(p.parts)
+        if old is not None and parts[idx] != old:
+            raise ValueError(f'Expected {old!r} at index {idx} in {path!r}')
+        parts[idx] = new
+        return str(pathlib.Path(*parts))
+
+    @staticmethod
+    def replace_path_suffix(path: str, new: str, *, old: str | None = None) -> str:
+        """
+        Replace the suffix of a path with a new value.
+
+        Args:
+            path: The path to modify.
+            new: The new value to use.
+            old: If not None, check that the suffix is this value before replacing it.
+
+        Returns:
+            The modified path.
+        """
+        p = pathlib.Path(path)
+        if old is not None and p.suffix != old:
+            raise ValueError(f'Expected {old!r} suffix in {path!r}')
+        return str(p.with_suffix(new))
+
+    # path getting/filtering...
     def get_paths(self, *path_parts: str, filter_variants: bool = False) -> list[str]:
         """Get a list of paths matching the given path parts."""
         paths = sorted(glob.glob(os.path.join(self.root_path, *path_parts)))
@@ -395,7 +438,8 @@ class Pipeline:
         """
         return [p for p in paths if self.test_path_for_data_variants(p)]
 
-    # Pipeline steps
+    # Pipeline steps -------------------------------------------------------------------
+    # remove_groups
     def run_remove_groups(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['remove_groups']
         paths_in = self.get_paths(dir_in, '*_uncal.fits')
@@ -403,6 +447,7 @@ class Pipeline:
         for p in tqdm.tqdm(paths_in, desc='remove_groups'):
             remove_groups.remove_groups_from_file(p, self.groups_to_use)
 
+    # stage1
     def run_stage1(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['remove_groups']
         for root_path in self.iterate_group_root_paths():
@@ -410,7 +455,6 @@ class Pipeline:
             output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             self.log(f'Output directory: {output_dir!r}', time=False)
-            self.log(f'Processing {len(args_list)} files...', time=False)
             check_path(output_dir)
             runmany(
                 self.reduction_detector1_fn,
@@ -426,6 +470,7 @@ class Pipeline:
             path_in, output_dir=output_dir, save_results=True, **kwargs
         )
 
+    # stage2
     def run_stage2(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['stage2']
         for root_path in self.iterate_group_root_paths():
@@ -433,7 +478,6 @@ class Pipeline:
             output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             self.log(f'Output directory: {output_dir!r}', time=False)
-            self.log(f'Processing {len(args_list)} files...', time=False)
             check_path(output_dir)
             runmany(
                 self.reduction_spec2_fn,
@@ -447,6 +491,88 @@ class Pipeline:
         path_in, output_dir, kwargs = args
         Spec2Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
 
+    # TODO background
+
+    # stage3
+    def run_stage3(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['stage3']
+        for root_path in self.iterate_group_root_paths():
+            # TODO deal with variants here
+            # TODO stage3 stuff
+            pass
+
+    # navigate
+    def run_navigate(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['navigate']
+        self.log(f'Basic navigation: {self.basic_navigation}')
+        navigate_jwst_observations.load_kernels()
+        for root_path in self.iterate_group_root_paths():
+            paths_in = self.get_paths(
+                root_path, dir_in, '*', '*_s3d.fits', filter_variants=True
+            )
+            navigate_jwst_observations.navigate_multiple(
+                *paths_in, basic=self.basic_navigation, rename_directory=False, **kwargs
+            )
+
+    # desaturate
+    def run_desaturate(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['desaturate']
+
+        # Group paths by their relative path to the group root path
+        paths_dict: dict[str, list[str]] = {}
+        for root_path in self.iterate_group_root_paths():
+            paths_in = self.get_paths(
+                root_path, dir_in, '*', '*_nav.fits', filter_variants=True
+            )
+            for p_in in paths_in:
+                # get file path relative to the root of the group root path
+                relpath = os.path.relpath(p_in, root_path)
+                relpath = self.replace_path_part(relpath, -3, dir_out, old=dir_in)
+                p_out = os.path.join(root_path, relpath)
+                paths_dict.setdefault(p_out, []).append(p_in)
+
+        args_list = [
+            (paths_in, p_out, kwargs) for p_out, paths_in in paths_dict.items()
+        ]
+        runmany(
+            self.desaturate_fn, args_list, desc='desaturate', **self.parallel_kwargs
+        )
+
+    @staticmethod
+    def desaturate_fn(args: tuple[list[str], str, dict[str, Any]]) -> None:
+        paths_in, path_out, kwargs = args
+        desaturate_data.replace_saturated(paths_in, path_out, **kwargs)
+
+    # despike
+    def run_despike(self, kwargs: dict[str, Any]) -> None:
+        if self.parallel_kwargs.get('parallel_frac', False):
+            # don't want progress bars to be printed when running in parallel
+            kwargs.setdefault('progress_bar', False)
+
+        dir_in, dir_out = self.step_directories['despike']
+        paths_in = self.get_paths(
+            self.root_path, dir_in, '*', '*_nav.fits', filter_variants=True
+        )
+        paths_out = [
+            self.replace_path_part(p, -3, dir_out, old=dir_in) for p in paths_in
+        ]
+        args_list = [(p_in, p_out, kwargs) for p_in, p_out in zip(paths_in, paths_out)]
+        runmany(self.despike_fn, args_list, desc='despike', **self.parallel_kwargs)
+
+    @staticmethod
+    def despike_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+        p_in, p_out, kwargs = args
+        despike_data.despike_cube(p_in, p_out, **kwargs)
+
+    # plot
+    def run_plot(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['plot']
+        for root_path in self.iterate_group_root_paths():
+            # TODO deal with stages to plot here
+            # TODO add prefixes here
+            pass
+        
+    # TODO animate
 
 class MiriPipeline(Pipeline):
     @property
