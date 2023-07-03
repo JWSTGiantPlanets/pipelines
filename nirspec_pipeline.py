@@ -169,7 +169,7 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
 python3 nirspec_pipeline.py /data/uranus/lon1 --start_step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
-python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": false}, "animation": {"radius_factor": 2.5}}'
+python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
 """
 from typing import Any, Collection, Literal
 
@@ -266,7 +266,7 @@ def run_pipeline(
                 'stage3: {
                     'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}
                 },
-                'plot': {'plot_brightest_spectrum': False},
+                'plot': {'plot_brightest_spectrum': True},
                 'animate': {'radius_factor': 2.5},
             },
         )
@@ -320,7 +320,7 @@ def run_pipeline(
         reduction_parallel_kwargs: Dictionary of keyword arguments to customise parallel
             processing for the reduction steps (i.e. `stage1`-`stage3`). This will be
             merged with `parallel_kwargs` (i.e.
-            `parallel_kwargs | reduction_parallel_kwargs
+            `parallel_kwargs | reduction_parallel_kwargs`).
     """
     pipeline = NirspecPipeline(
         root_path,

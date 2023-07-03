@@ -174,7 +174,7 @@ python3 miri_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
 python3 miri_pipeline.py /data/uranus/lon1 --start_step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
-python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": false}, "animation": {"radius_factor": 2.5}}'
+python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
 """
 import argparse
 import os
@@ -305,7 +305,7 @@ def run_pipeline(
                 'stage3: {
                     'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}
                 },
-                'plot': {'plot_brightest_spectrum': False},
+                'plot': {'plot_brightest_spectrum': True},
                 'animate': {'radius_factor': 2.5},
             },
         )
@@ -359,7 +359,7 @@ def run_pipeline(
         reduction_parallel_kwargs: Dictionary of keyword arguments to customise parallel
             processing for the reduction steps (i.e. `stage1`-`stage3`). This will be
             merged with `parallel_kwargs` (i.e.
-            `parallel_kwargs | reduction_parallel_kwargs
+            `parallel_kwargs | reduction_parallel_kwargs`).
 
         defringe: Toggle defringing of the data. If True, defringe data will be saved
             and processed. If `'both'` (the default), the pipeline steps will
@@ -434,13 +434,13 @@ class MiriPipeline(Pipeline):
     def stage_directories_to_plot(self) -> tuple[str, ...]:
         return STAGE_DIRECTORIES_TO_PLOT
 
-    def process_skip_steps(
+    def process_steps_list(
         self,
         skip_steps: Collection[Step] | None,
         start_step: Step | None,
         end_step: Step | None,
     ) -> set[Step]:
-        skip_steps = super().process_skip_steps(skip_steps, start_step, end_step)
+        skip_steps = super().process_steps_list(skip_steps, start_step, end_step)
         if not self.defringe:
             skip_steps.add('defringe')
         return skip_steps

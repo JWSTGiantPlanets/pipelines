@@ -152,7 +152,7 @@ class Pipeline:
         if isinstance(groups_to_use, str):
             groups_to_use = [int(g) for g in groups_to_use.split(',')]
         if isinstance(step_kwargs, str):
-            step_kwargs = cast(dict[str, Any], json.loads(step_kwargs))
+            step_kwargs = cast(dict[Step, dict[str, Any]], json.loads(step_kwargs))
 
         parallel_kwargs = dict(
             parallel_frac=parallel,
@@ -1042,8 +1042,8 @@ class MiriPipeline(Pipeline):
 
 def get_pipeline_argument_parser(
     pipeline: Type[Pipeline],
-    step_descriptions: str = '',
-    cli_examples: str | None = None,
+    step_descriptions: str,
+    cli_examples: str,
 ) -> argparse.ArgumentParser:
     """
     Get a CLI argument parser for a given pipeline class.
@@ -1051,6 +1051,7 @@ def get_pipeline_argument_parser(
     The returned parser instance can be further customised before calling
     `run_pipeline(**vars(parser.parse_args()))` to run the pipeline.
     """
+    suffix = step_descriptions + '\n' + cli_examples
     name = pipeline.get_instrument()
     parser = argparse.ArgumentParser(
         description=(
@@ -1058,9 +1059,8 @@ def get_pipeline_argument_parser(
             'stage0 to stage3, and custom pipeline steps for additional cleaning and '
             'data visualisation. For more customisation, this script can be imported '
             'and run in Python (see the source code for mode details).\n\n'
-            'The following steps are run in the full pipeline:' + step_descriptions
+            'The following steps are run in the full pipeline:' + suffix
         ),
-        epilog=cli_examples,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         argument_default=argparse.SUPPRESS,
     )
@@ -1071,18 +1071,6 @@ def get_pipeline_argument_parser(
             contain a subdirectory with the stage0 data (i.e. `root_path/stage0`).
             Additional directories will be created automatically for each step of the
             pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.).""",
-    )
-
-    parser.add_argument(
-        '--parallel',
-        nargs='?',
-        const=1,
-        type=float,
-        help="""Fraction of CPU cores to use when multiprocessing. For example, set 
-        0.5 to use half of the available cores. If unspecified, then multiprocessing 
-        will not be used and the pipeline will be run serially. If specified but no 
-        value is given, then all available cores will be used (i.e. `--parallel` is 
-        equivalent to `--parallel 1`).""",
     )
     parser.add_argument(
         '--parallel',
@@ -1134,8 +1122,8 @@ def get_pipeline_argument_parser(
         type=str,
         help="""JSON string containing keyword arguments to pass to individual pipeline
             steps. For example, 
-            `--kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "animate": {"radius_factor": 2.5}}'` 
-            will pass the custom arguments to the stage3 and animation steps.
+            `--kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'` 
+            will pass the custom arguments to the stage3 and plot steps.
             """,
     )
     parser.add_argument(
