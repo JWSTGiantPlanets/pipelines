@@ -1,8 +1,5 @@
-import argparse
 import datetime
 import glob
-import itertools
-import json
 import os
 import pathlib
 from collections.abc import Collection
@@ -16,7 +13,6 @@ from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
 from jwst.residual_fringe import ResidualFringeStep
 
-import background_subtraction
 import desaturate_data
 import despike_data
 import flat_field
@@ -258,6 +254,7 @@ class Pipeline:
 
         # Add skip steps dependent on provided arguments
         if not self.desaturate:
+            skip_steps.add('remove_groups')
             skip_steps.add('desaturate')
         if self.basic_navigation:
             skip_steps.add('animate')
@@ -487,8 +484,7 @@ class Pipeline:
                 **self.reduction_parallel_kwargs,
             )
 
-    @staticmethod
-    def reduction_detector1_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def reduction_detector1_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         path_in, output_dir, kwargs = args
         Detector1Pipeline.call(
             path_in, output_dir=output_dir, save_results=True, **kwargs
@@ -556,8 +552,7 @@ class Pipeline:
                 **self.reduction_parallel_kwargs,
             )
 
-    @staticmethod
-    def reduction_spec2_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def reduction_spec2_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         path_in, output_dir, kwargs = args
         Spec2Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
 
@@ -650,8 +645,7 @@ class Pipeline:
                 **self.reduction_parallel_kwargs,
             )
 
-    @staticmethod
-    def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def reduction_spec3_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         asn_path, output_dir, kwargs = args
         Spec3Pipeline.call(
             asn_path,
@@ -741,8 +735,7 @@ class Pipeline:
             self.desaturate_fn, args_list, desc='desaturate', **self.parallel_kwargs
         )
 
-    @staticmethod
-    def desaturate_fn(args: tuple[list[str], str, dict[str, Any]]) -> None:
+    def desaturate_fn(self, args: tuple[list[str], str, dict[str, Any]]) -> None:
         paths_in, path_out, kwargs = args
         desaturate_data.replace_saturated(paths_in, path_out, **kwargs)
 
@@ -762,8 +755,7 @@ class Pipeline:
         args_list = [(p_in, p_out, kwargs) for p_in, p_out in zip(paths_in, paths_out)]
         runmany(self.despike_fn, args_list, desc='despike', **self.parallel_kwargs)
 
-    @staticmethod
-    def despike_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def despike_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         p_in, p_out, kwargs = args
         despike_data.despike_cube(p_in, p_out, **kwargs)
 
@@ -790,8 +782,7 @@ class Pipeline:
             args_list = [(p_in, p_out, kwargs) for p_in, p_out in paths]
             runmany(self.plot_fn, args_list, desc='plot', **self.parallel_kwargs)
 
-    @staticmethod
-    def plot_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def plot_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         p_in, p_out, kwargs = args
         jwst_summary_plots.make_summary_plot(p_in, p_out, **kwargs)
 
@@ -825,8 +816,7 @@ class Pipeline:
         ]
         runmany(self.animate_fn, args_list, desc='animate', **self.parallel_kwargs)
 
-    @staticmethod
-    def animate_fn(args: tuple[list[str], str, dict[str, Any]]) -> None:
+    def animate_fn(self, args: tuple[list[str], str, dict[str, Any]]) -> None:
         paths_in, p_out, kwargs = args
         jwst_summary_animation.make_animation(paths_in, p_out, **kwargs)
 
@@ -840,7 +830,7 @@ class MiriPipeline(Pipeline):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.flat_data_path = flat_data_path
+        self.flat_data_path = self.standardise_path(flat_data_path)
         self.defringe = defringe
 
     @property
@@ -886,9 +876,13 @@ class MiriPipeline(Pipeline):
             variants.add('fringe')
         return variants
 
+    def print_reduction_info(self, skip_steps: set[Step]) -> None:
+        super().print_reduction_info(skip_steps)
+        self.log(f'Defringe: {self.defringe!r}', time=False)
+        self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
+
     # Step overrides
-    @staticmethod
-    def reduction_detector1_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def reduction_detector1_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         path_in, output_dir, kwargs = args
         kwargs = kwargs.copy()
         with fits.open(path_in) as hdul:
@@ -917,8 +911,7 @@ class MiriPipeline(Pipeline):
                 **self.reduction_parallel_kwargs,
             )
 
-    @staticmethod
-    def defringe_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def defringe_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         path_in, output_dir, kwargs = args
         ResidualFringeStep.call(
             path_in, output_dir=output_dir, save_results=True, **kwargs
@@ -991,10 +984,32 @@ class NirspecPipeline(Pipeline):
         return NIRSPEC_STAGE_DIRECTORIES_TO_PLOT
 
     # Step overrides
-    @staticmethod
-    def reduction_spec2_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+    def reduction_spec2_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         try:
             return super().reduction_spec2_fn(args)
         except NoDataOnDetectorError:
             path_in, output_dir, kwargs = args
             print(f'No data on detector for {path_in!r}, skipping')
+
+
+if __name__ == '__main__':
+    import sys
+
+    # TODO delete this
+
+    if sys.argv[1] == 'MIRI':
+        pipeline = MiriPipeline(
+            '~/Downloads/test/MIRI',
+            desaturate=False,
+            defringe=False,
+            flat_data_path=os.path.join(
+                '~/Dropbox/science/jwst_data',
+                'MIRI_IFU/Saturn_2022nov13/flat_field/merged',
+                'ch{channel}-{band}_constructed_flat{fringe}.fits',
+            ),
+        )
+        pipeline.run()
+
+    if sys.argv[1] == 'NIRSpec':
+        pipeline = NirspecPipeline('~/Downloads/test/NIRSpec', desaturate=False)
+        pipeline.run()
