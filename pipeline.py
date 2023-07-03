@@ -1084,6 +1084,16 @@ def get_pipeline_argument_parser(
         equivalent to `--parallel 1`).""",
     )
     parser.add_argument(
+        '--desaturate',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="""Toggle desaturation of the data. If desaturation is enabled the 
+            `reduction` step will be run for different numbers of groups, which are then
+            combined in the `desaturate` step to produce a desaturated data cube. This
+            desaturation is enabled by default.
+            """,
+    )
+    parser.add_argument(
         '--groups_to_use',
         type=str,
         help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will

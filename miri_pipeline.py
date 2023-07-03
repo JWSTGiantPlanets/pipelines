@@ -110,7 +110,7 @@ To use this script you will need to:
 
     #!/bin/bash
     #
-    #PBS -N Pipeline
+    #PBS -N MIRI_Pipeline
     #PBS -l walltime=24:00:00
     #PBS -l vmem=80gb
     #PBS -l nodes=1:ppn=8
