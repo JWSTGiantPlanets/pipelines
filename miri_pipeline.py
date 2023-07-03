@@ -490,7 +490,7 @@ class MiriPipeline(Pipeline):
     def defringe_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         path_in, output_dir, kwargs = args
         ResidualFringeStep.call(
-            path_in, output_dir=output_dir, save_results=True, **kwargs
+            path_in, output_dir=output_dir, save_results=True, skip=False, **kwargs
         )
 
     def get_stage3_variant_paths_in(self, variant: frozenset[str]) -> list[str]:
