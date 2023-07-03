@@ -76,7 +76,7 @@ data cubes which can be used for science. Within each science directory (`stage3
 - `stage3/d1` contains the stage3 data for dither 1
 - `stage3/d2_bg` contains the stage3 data for dither 2 with the background subtracted
 - `stage3/combined` contains the stage4 data with all dithers combined
-- `stage4_flat/d3` contains the stage4 for dither 3
+- `stage4_despike/d3` contains the stage4 for dither 3
 
 The `plots` and `animation` directories contain quick look visualisations of the data.
 
