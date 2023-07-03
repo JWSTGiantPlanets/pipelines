@@ -235,13 +235,19 @@ BAND_ABC_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
 
 # Try to get a useful default flat data path that at least works natively on Leicester's
 # ALICE HPC
+_filename = 'ch{channel}-{band}_constructed_flat{fringe}.fits'
 _path_options = (
-    '/data/nemesis/jwst/MIRI_IFU/flat_field',
+    os.path.join('/data/nemesis/jwst/MIRI_IFU/flat_field', _filename),
     os.path.join(
-        os.path.dirname(__file__), '..', 'jwst_data', 'MIRI_IFU', 'flat_field'
+        os.path.dirname(__file__),
+        '..',
+        'jwst_data',
+        'MIRI_IFU',
+        'flat_field',
+        _filename,
     ),
-    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', 'flat_field'),
-    os.path.join(os.path.dirname(__file__), 'flat_field'),
+    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', 'flat_field', _filename),
+    os.path.join(os.path.dirname(__file__), 'flat_field', _filename),
 )
 DEFAULT_FLAT_DATA_PATH = _path_options[-1]
 for _p in _path_options:
