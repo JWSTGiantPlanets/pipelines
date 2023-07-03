@@ -1,3 +1,6 @@
+"""
+Common JWST pipeline code used by the MIRI and NIRSpec pipelines.
+"""
 import datetime
 import glob
 import os
@@ -29,14 +32,14 @@ Step: TypeAlias = Literal[
     'remove_groups',
     'stage1',
     'stage2',
-    'defringe',
     'stage3',
     'navigate',
     'desaturate',
-    'flat',
     'despike',
     'plot',
     'animate',
+    'flat',  # MIRI only
+    'defringe',  # MIRI only
 ]
 
 MIRI_STEPS = (
@@ -56,7 +59,6 @@ MIRI_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
     'stage2': {'steps': {'cube_build': {'skip': True}, 'extract_1d': {'skip': True}}},
     'stage3': {
         'steps': {
-            'master_background': {'skip': True},
             'extract_1d': {'skip': True},
             'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
         }
@@ -90,7 +92,7 @@ NIRSPEC_STEPS = (
 NIRSPEC_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
     'stage2': {
         'steps': {
-            'cube_build': {'coord_system': 'ifualign'},
+            'cube_build': {'skip': True},
             'extract_1d': {'skip': True},
         }
     },
@@ -114,6 +116,51 @@ NIRSPEC_STAGE_DIRECTORIES_TO_PLOT = (
 
 
 class Pipeline:
+    """
+    Base class for JWST pipeline objects.
+
+    This cannot be run directly, but should be subclassed for each instrument.
+
+    Args:
+        root_path: Path to the root directory containing the data. This directory should
+            contain a subdirectory with the stage 0 data (i.e. `root_path/stage0`).
+            Additional directories will be created automatically for each step of the
+            pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.).
+        parallel: Fraction of CPU cores to use when multiprocessing. Set to 0 to run
+            serially, 1 to use all cores, 0.5 to use half of the cores, etc.
+        desaturate: Toggle desaturation of the data. If True, the `stage1`-`navigate`
+            steps will be run for different numbers of groups, which are then combined
+            in the`desaturate` step to produce a desaturated data cube.
+        groups_to_use: List of groups to reduce and use for desaturating the data. If
+            this is `None` (the default), then all available groups will be used. If
+            `desaturate` is False, then this argument will be ignored. The data with all
+            groups will always be included.
+        background_subtract: Toggle background subtraction. If True, the backgrounds
+            in the `background_path` directory will be subtracted from the data in
+            `stage2`.
+        background_path: Path to the directory containing the background data (i.e. the
+            equivalent of `root_path` for the background observations). Note that the
+            background data must be reduced to at least `stage2` for this to work.
+        basic_navigation: Toggle between basic or full navigation. If True, then only
+            RA and Dec navigation backplanes are generated (e.g. useful for small
+            bodies). If False (the default), then full navigation is performed,
+            generating a full set of coordinate backplanes (lon/lat, illumination
+            angles etc.). Using basic navigation automatically skips the animation step.
+        step_kwargs: Dictionary of keyword arguments to pass to each step of the
+            pipeline. The keys should be the step names (e.g. `stage1`, `stage2` etc.)
+            and the values should be dictionaries of keyword arguments to pass to the
+            step. See the documentation for each step for the available keyword
+            arguments. For example,
+            `step_kwargs={'stage3':{'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}}}`
+            can will customise the `stage3` step.
+        parallel_kwargs: Dictionary of keyword arguments to customise parallel
+            processing.
+        reduction_parallel_kwargs: Dictionary of keyword arguments to customise parallel
+            processing for the reduction steps (i.e. `stage1`-`stage3`). This will be
+            merged with `parallel_kwargs` (i.e.
+            `parallel_kwargs | reduction_parallel_kwargs`).
+    """
+
     def __init__(
         self,
         root_path: str,
@@ -160,14 +207,20 @@ class Pipeline:
     # Pipeline data to override in subclasses ------------------------------------------
     @property
     def instrument(self) -> str:
+        """String giving the instrument name."""
         raise NotImplementedError
 
     @property
     def steps(self) -> tuple[Step, ...]:
+        """Tuple of step names in the order that they should be executed."""
         raise NotImplementedError
 
     @property
     def default_kwargs(self) -> dict[Step, dict[str, Any]]:
+        """
+        Dictionary of default keyword arguments for each step. These will be merged
+        with the custom `step_kwargs` argument passed to the pipeline.
+        """
         raise NotImplementedError
 
     @property
@@ -189,6 +242,7 @@ class Pipeline:
 
     @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
+        """Tuple of directory names to generate plots for."""
         raise NotImplementedError
 
     # Pipeline running methods ---------------------------------------------------------
@@ -199,6 +253,16 @@ class Pipeline:
         start_step: Step | None = None,
         end_step: Step | None = None,
     ):
+        """
+        Run the pipeline.
+
+        Args:
+            skip_steps: List of steps to skip.
+            start_step: Convenience argument to add all steps before `start_step` to
+                `skip_steps`.
+            end_step: Convenience argument to add all steps after `end_step` to
+                `skip_steps`.
+        """
         skip_steps = self.process_skip_steps(skip_steps, start_step, end_step)
         self.log(f'Running {self.instrument} pipeline')
         self.print_reduction_info(skip_steps)
@@ -213,7 +277,7 @@ class Pipeline:
         self.log('ALL DONE')
 
     def run_step(self, step: Step) -> None:
-        """Run pipeline step"""
+        """Run individual pipeline step."""
         self.log(f'Running {step} step')
         kwargs = self.default_kwargs.get(step, {}) | self.step_kwargs.get(step, {})
         if kwargs:
@@ -228,8 +292,7 @@ class Pipeline:
         end_step: Step | None,
     ) -> set[Step]:
         """
-        Process the various step arguments to create a comprehensive set of steps to
-        skip.
+        Process the various arguments to create a comprehensive set of steps to skip.
         """
         if skip_steps is None:
             skip_steps = []
@@ -361,6 +424,14 @@ class Pipeline:
 
     @property
     def group_root_paths(self) -> list[str]:
+        """
+        List of relative root paths for different numbers of reduced groups, in
+        descending order.
+
+        If desaturation is enabled, this list will be of the form:
+        `[root_path, root_path+'/groups/4_groups', root_path+'/groups/3_groups', ...]`.
+        If desaturation is disabled, then the returned list will be `[root_path]`.
+        """
         group_root_paths = [self.root_path]
         if self.desaturate:
             # If desaturating, we also need to reduce the data with fewer groups
@@ -381,6 +452,7 @@ class Pipeline:
         return group_root_paths
 
     def iterate_group_root_paths(self) -> Generator[str, Any, None]:
+        """Iterate over the group root paths, yielding each path."""
         group_root_paths = self.group_root_paths
         for idx, root_path in enumerate(group_root_paths):
             if len(group_root_paths) > 1:
@@ -471,9 +543,9 @@ class Pipeline:
 
     # stage1
     def run_stage1(self, kwargs: dict[str, Any]) -> None:
-        dir_in, dir_out = self.step_directories['remove_groups']
+        dir_in, dir_out = self.step_directories['stage1']
         for root_path in self.iterate_group_root_paths():
-            paths_in = self.get_paths(dir_in, '*.fits')
+            paths_in = self.get_paths(dir_in, '*uncal.fits')
             output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             check_path(output_dir)
@@ -577,7 +649,8 @@ class Pipeline:
         science_path: str,
         bg_paths: list[str] | None = None,
     ) -> str:
-        asn = asn_from_list([science_path])
+        prodname = os.path.basename(science_path).replace('_rate.fits', '')
+        asn = asn_from_list([science_path], product_name=prodname)
         if bg_paths is not None:
             for bg_path in bg_paths:
                 asn['products'][0]['members'].append(
@@ -1008,7 +1081,7 @@ if __name__ == '__main__':
                 'ch{channel}-{band}_constructed_flat{fringe}.fits',
             ),
         )
-        pipeline.run()
+        pipeline.run(start_step='stage2')
 
     if sys.argv[1] == 'NIRSpec':
         pipeline = NirspecPipeline('~/Downloads/test/NIRSpec', desaturate=False)
