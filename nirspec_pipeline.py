@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+f"""
 Full JWST reduction pipeline for NIRSpec IFU data, including the standard reduction from
 stage0 to stage3, and custom pipeline steps for additional cleaning and data 
 visualisation.
@@ -67,6 +67,21 @@ If the pipeline is run with desaturation enabled, the pipeline flow is:
 - The `desaturate` step is then run to combine the various group data into a single
   desaturated dataset.
 - Subsequent pipeline steps (e.g. `plot`) are run on the desaturated data.
+
+Data cubes are saved at each step of the pipeline, with the data in each stage directory
+used as the input for the next stage. The `stage0`, `stage1` and `stage2` directories
+contain partially reduced data cubes. The `stage3` directory onwards contain reduced 
+data cubes which can be used for science. Within each science directory (`stage3`, 
+`stage4...` etc.), files are organised by dither and any data variant. For example:
+- `stage3/d1` contains the stage3 data for dither 1
+- `stage3/d2_bg` contains the stage3 data for dither 2 with the background subtracted
+- `stage3/combined` contains the stage4 data with all dithers combined
+- `stage4_flat/d3` contains the stage4 for dither 3
+
+The `plots` and `animation` directories contain quick look visualisations of the data.
+
+Metadata about the pipeline processing steps is saved in the `PRIMARY` FITS header of 
+each file.
 
 For more command line examples, see CLI_EXAMPLES below, and for more Python examples,
 see the docstring for `run_pipeline()` below.
