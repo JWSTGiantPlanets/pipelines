@@ -1,12 +1,15 @@
 """
 Common JWST pipeline code used by the MIRI and NIRSpec pipelines.
+
+GitHub repository: https://github.com/JWSTGiantPlanets/pipelines
 """
+import argparse
 import datetime
 import glob
+import json
 import os
 import pathlib
-from collections.abc import Collection
-from typing import Any, Generator, Literal, TypeAlias, overload
+from typing import Any, Collection, Generator, Literal, Type, TypeAlias, cast, overload
 
 import tqdm
 from astropy.io import fits
@@ -25,8 +28,6 @@ import navigate_jwst_observations
 import remove_groups
 from parallel_tools import runmany
 from tools import check_path
-
-# TODO docstrings
 
 Step: TypeAlias = Literal[
     'remove_groups',
@@ -56,7 +57,13 @@ MIRI_STEPS = (
     'animate',
 )
 MIRI_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
-    'stage2': {'steps': {'cube_build': {'skip': True}, 'extract_1d': {'skip': True}}},
+    'stage2': {
+        'steps': {
+            'cube_build': {'skip': True},
+            'extract_1d': {'skip': True},
+            'bkg_subtract': {'skip': False},
+        },
+    },
     'stage3': {
         'steps': {
             'extract_1d': {'skip': True},
@@ -77,42 +84,6 @@ MIRI_STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
     'despike': ('stage4_flat', 'stage5_despike'),
 }
 MIRI_BAND_ABC_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
-
-NIRSPEC_STEPS = (
-    'remove_groups',
-    'stage1',
-    'stage2',
-    'stage3',
-    'navigate',
-    'desaturate',
-    'despike',
-    'plot',
-    'animate',
-)
-NIRSPEC_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
-    'stage2': {
-        'steps': {
-            'cube_build': {'skip': True},
-            'extract_1d': {'skip': True},
-        }
-    },
-    'stage3': {
-        'steps': {
-            'cube_build': {'coord_system': 'ifualign'},
-            'extract_1d': {'skip': True},
-        }
-    },
-}
-NIRSPEC_STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
-    'despike': ('', 'stage4_despike')
-}
-
-NIRSPEC_STAGE_DIRECTORIES_TO_PLOT = (
-    'stage3',
-    'stage3_desaturated',
-    'stage4_despike',
-    'stage5_background',
-)
 
 
 class Pipeline:
@@ -140,12 +111,14 @@ class Pipeline:
             `stage2`.
         background_path: Path to the directory containing the background data (i.e. the
             equivalent of `root_path` for the background observations). Note that the
-            background data must be reduced to at least `stage2` for this to work.
+            background data must be reduced to at least `stage1` for this to work as
+            the *_rate.fits files are used for the background subtraction.
         basic_navigation: Toggle between basic or full navigation. If True, then only
             RA and Dec navigation backplanes are generated (e.g. useful for small
             bodies). If False (the default), then full navigation is performed,
             generating a full set of coordinate backplanes (lon/lat, illumination
             angles etc.). Using basic navigation automatically skips the animation step.
+            This is mainly useful if you get SPICE errors when navigating the data.
         step_kwargs: Dictionary of keyword arguments to pass to each step of the
             pipeline. The keys should be the step names (e.g. `stage1`, `stage2` etc.)
             and the values should be dictionaries of keyword arguments to pass to the
@@ -167,14 +140,20 @@ class Pipeline:
         *,
         parallel: float | bool = False,
         desaturate: bool = True,
-        groups_to_use: list[int] | None = None,
+        groups_to_use: list[int] | None | str = None,
         background_subtract: bool | Literal['both'] = 'both',
         background_path: str | None = None,
         basic_navigation: bool = False,
-        step_kwargs: dict[Step, dict[str, Any]] | None = None,
+        step_kwargs: dict[Step, dict[str, Any]] | None | str = None,
         parallel_kwargs: dict[str, Any] | None = None,
         reduction_parallel_kwargs: dict[str, Any] | None = None,
     ):
+        # Process CLI arguements
+        if isinstance(groups_to_use, str):
+            groups_to_use = [int(g) for g in groups_to_use.split(',')]
+        if isinstance(step_kwargs, str):
+            step_kwargs = cast(dict[str, Any], json.loads(step_kwargs))
+
         parallel_kwargs = dict(
             parallel_frac=parallel,
             timeout=60 * 60,
@@ -205,8 +184,8 @@ class Pipeline:
         return f'{self.__class__.__name__}({self.root_path!r})'
 
     # Pipeline data to override in subclasses ------------------------------------------
-    @property
-    def instrument(self) -> str:
+    @staticmethod
+    def get_instrument() -> str:
         """String giving the instrument name."""
         raise NotImplementedError
 
@@ -241,6 +220,11 @@ class Pipeline:
         }
 
     @property
+    def stage3_file_match_hdr_keys(self) -> tuple[str, ...]:
+        """Header keys for matching stage2 files to combine in stage3."""
+        raise NotImplementedError
+
+    @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
         """Tuple of directory names to generate plots for."""
         raise NotImplementedError
@@ -264,20 +248,22 @@ class Pipeline:
                 `skip_steps`.
         """
         skip_steps = self.process_skip_steps(skip_steps, start_step, end_step)
-        self.log(f'Running {self.instrument} pipeline')
+        self.log(f'Running {self.get_instrument()} pipeline')
         self.print_reduction_info(skip_steps)
-        print()
+
         for step in self.steps:
             if step in skip_steps:
                 continue
             self.run_step(step)
 
-        self.log(f'{self.instrument} pipeline completed with')
+        print()
+        self.log(f'{self.get_instrument()} pipeline completed with')
         self.print_reduction_info(skip_steps)
         self.log('ALL DONE')
 
     def run_step(self, step: Step) -> None:
         """Run individual pipeline step."""
+        print()
         self.log(f'Running {step} step')
         kwargs = self.default_kwargs.get(step, {}) | self.step_kwargs.get(step, {})
         if kwargs:
@@ -520,7 +506,9 @@ class Pipeline:
         """
         return [p for p in paths if self.test_path_for_data_variants(p)]
 
-    def get_file_match_key(self, path: str | fits.Header) -> tuple[str | None, ...]:
+    def get_file_match_key(
+        self, path: str | fits.Header, hdr_keys: tuple[str, ...]
+    ) -> tuple[str | None, ...]:
         """
         Get a key used to e.g. match background and science files.
         """
@@ -529,8 +517,7 @@ class Pipeline:
                 hdr = hdul['PRIMARY'].header  #  type: ignore
         else:
             hdr = path
-        keys = ('CHANNEL', 'BAND', 'DETECTOR', 'FILTER', 'GRATING')
-        return tuple(hdr.get(k, None) for k in keys)  # type: ignore
+        return tuple(hdr.get(k, None) for k in hdr_keys)  # type: ignore
 
     # Pipeline steps -------------------------------------------------------------------
     # remove_groups
@@ -585,27 +572,28 @@ class Pipeline:
             self.log('Only producing non-background subtracted data', time=False)
             background_options = [False]
 
-        background_path_dict = self.get_background_path_dict()
         if True in background_options:
             self.log(f'Background path: {self.background_path!r}', time=False)
+            background_path_dict = self.get_background_path_dict()
             self.log(
                 f'Found {len(background_path_dict)} background files to consider',
-                time=False,
             )
+        else:
+            background_path_dict = {}
 
         for root_path in self.iterate_group_root_paths():
             paths_in = self.get_paths(dir_in, '*rate.fits')
             args_list: list[tuple[str, str, dict[str, Any]]] = []
             for background in background_options:
                 output_dir = os.path.join(root_path, dir_out)
-                check_path(output_dir)
                 if background:
                     output_dir = os.path.join(output_dir, 'bg')
+                check_path(output_dir)
                 for p_in in paths_in:
                     if background:
                         try:
                             bg_paths = background_path_dict[
-                                self.get_file_match_key(p_in)
+                                self.get_file_match_key_for_background(p_in)
                             ]
                         except KeyError:
                             self.log(
@@ -640,9 +628,19 @@ class Pipeline:
         )
         out: dict[tuple[str | None, ...], list[str]] = {}
         for p in paths:
-            key = self.get_file_match_key(p)
+            key = self.get_file_match_key_for_background(p)
             out.setdefault(key, []).append(p)
         return out
+
+    def get_file_match_key_for_background(
+        self, path: str | fits.Header
+    ) -> tuple[str | None, ...]:
+        """
+        Get a key used to match background and science files.
+        """
+        return self.get_file_match_key(
+            path, ('INSTRUME', 'CHANNEL', 'BAND', 'DETECTOR', 'FILTER', 'GRATING')
+        )
 
     def write_asn_for_stage2(
         self,
@@ -652,9 +650,9 @@ class Pipeline:
         prodname = os.path.basename(science_path).replace('_rate.fits', '')
         asn = asn_from_list([science_path], product_name=prodname)
         if bg_paths is not None:
-            for bg_path in bg_paths:
+            for p_bg in bg_paths:
                 asn['products'][0]['members'].append(
-                    {'expname': bg_paths, 'exptype': 'background'}
+                    {'expname': p_bg, 'exptype': 'background'}
                 )
         asn_path = os.path.join(
             os.path.dirname(science_path),
@@ -692,15 +690,15 @@ class Pipeline:
                 )
 
                 for (dither, tile, match_key), paths_in in grouped_files.items():
-                    dirname = 'combined' if dither is None else f'dither{dither}'
+                    dirname = 'combined' if dither is None else f'd{dither}'
                     dirname = dirname + variant_dirname
                     output_dir = os.path.join(root_path, dir_out, dirname)
                     check_path(output_dir)
 
-                    match_key_string = '_'.join(k for k in match_key if k is not None)
+                    match_key_str = '_'.join(str(k) for k in match_key)
                     asn_path = os.path.join(
                         output_dir,
-                        f'l3asn-{tile}_{match_key_string}_dither-{dirname}.json',
+                        f'{match_key_str}_dither-{dirname}_{tile}_asn.json',
                     )
                     prodname = 'Level3' + (
                         f'_{tile}' if include_tile_in_prodname else ''
@@ -747,7 +745,7 @@ class Pipeline:
                 hdr = hdul[0].header  #  type: ignore
             dither = int(hdr['PATT_NUM'])
             tile = hdr['ACT_ID']
-            match_key = self.get_file_match_key(hdr)
+            match_key = self.get_file_match_key_for_stage3(hdr)
 
             # Do both separated (dither, ...) and combined (None, ....) dithers
             for k in [
@@ -756,6 +754,14 @@ class Pipeline:
             ]:
                 out.setdefault(k, []).append(p_in)
         return out
+
+    def get_file_match_key_for_stage3(
+        self, path: str | fits.Header
+    ) -> tuple[str | None, ...]:
+        """
+        Get a key used to match background and science files.
+        """
+        return self.get_file_match_key(path, self.stage3_file_match_hdr_keys)
 
     def write_asn_for_stage3(
         self, files: list[str], asn_path: str, prodname: str, **kwargs
@@ -906,8 +912,8 @@ class MiriPipeline(Pipeline):
         self.flat_data_path = self.standardise_path(flat_data_path)
         self.defringe = defringe
 
-    @property
-    def instrument(self) -> str:
+    @staticmethod
+    def get_instrument() -> str:
         return 'MIRI'
 
     @property
@@ -926,6 +932,10 @@ class MiriPipeline(Pipeline):
         directories['flat'] = (dir_in, directories['flat'][1])
 
         return directories
+
+    @property
+    def stage3_file_match_hdr_keys(self) -> tuple[str, ...]:
+        return ('CHANNEL', 'BAND')
 
     @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
@@ -1030,45 +1040,131 @@ class MiriPipeline(Pipeline):
         return f'{channel}{abc}'
 
 
-class NirspecPipeline(Pipeline):
-    @property
-    def instrument(self) -> str:
-        return 'NIRSpec'
+def get_pipeline_argument_parser(
+    pipeline: Type[Pipeline],
+    step_descriptions: str = '',
+    cli_examples: str | None = None,
+) -> argparse.ArgumentParser:
+    """
+    Get a CLI argument parser for a given pipeline class.
 
-    @property
-    def steps(self) -> tuple[Step, ...]:
-        return NIRSPEC_STEPS
+    The returned parser instance can be further customised before calling
+    `run_pipeline(**vars(parser.parse_args()))` to run the pipeline.
+    """
+    name = pipeline.get_instrument()
+    parser = argparse.ArgumentParser(
+        description=(
+            f'Full JWST {name} IFU pipeline including the standard reduction from '
+            'stage0 to stage3, and custom pipeline steps for additional cleaning and '
+            'data visualisation. For more customisation, this script can be imported '
+            'and run in Python (see the source code for mode details).\n\n'
+            'The following steps are run in the full pipeline:' + step_descriptions
+        ),
+        epilog=cli_examples,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        argument_default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        'root_path',
+        type=str,
+        help="""Path to the directory containing the data. This directory should
+            contain a subdirectory with the stage0 data (i.e. `root_path/stage0`).
+            Additional directories will be created automatically for each step of the
+            pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.).""",
+    )
 
-    @property
-    def default_kwargs(self) -> dict[Step, dict[str, Any]]:
-        return NIRSPEC_DEFAULT_KWARGS
-
-    @property
-    def step_directories(self) -> dict[Step, tuple[str, str]]:
-        directories = super().step_directories | NIRSPEC_STEP_DIRECTORIES
-
-        dir_in = 'stage3_desaturated' if self.desaturate else 'stage3'
-        directories['despike'] = (dir_in, directories['despike'][1])
-
-        return directories
-
-    @property
-    def stage_directories_to_plot(self) -> tuple[str, ...]:
-        return NIRSPEC_STAGE_DIRECTORIES_TO_PLOT
-
-    # Step overrides
-    def reduction_spec2_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
-        try:
-            return super().reduction_spec2_fn(args)
-        except NoDataOnDetectorError:
-            path_in, output_dir, kwargs = args
-            print(f'No data on detector for {path_in!r}, skipping')
+    parser.add_argument(
+        '--parallel',
+        nargs='?',
+        const=1,
+        type=float,
+        help="""Fraction of CPU cores to use when multiprocessing. For example, set 
+        0.5 to use half of the available cores. If unspecified, then multiprocessing 
+        will not be used and the pipeline will be run serially. If specified but no 
+        value is given, then all available cores will be used (i.e. `--parallel` is 
+        equivalent to `--parallel 1`).""",
+    )
+    parser.add_argument(
+        '--parallel',
+        nargs='?',
+        const=1,
+        type=float,
+        help="""Fraction of CPU cores to use when multiprocessing. For example, set 
+        0.5 to use half of the available cores. If unspecified, then multiprocessing 
+        will not be used and the pipeline will be run serially. If specified but no 
+        value is given, then all available cores will be used (i.e. `--parallel` is 
+        equivalent to `--parallel 1`).""",
+    )
+    parser.add_argument(
+        '--groups_to_use',
+        type=str,
+        help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will
+            keep the first four groups. If unspecified, all groups will be kept.""",
+    )
+    parser.add_argument(
+        '--background_subtract',
+        action=argparse.BooleanOptionalAction,
+        default='both',
+        help="""Toggle background subtractio of the data. If unspecified, then versions
+        with and without background subtraction will be created. Background subtraction
+        requires --background_path to be specified.""",
+    )
+    parser.add_argument(
+        '--background_path',
+        type=str,
+        help="""Path to directory containing background data. For example, if
+            your `root_path` is `/data/uranus/lon1`, the `background_path` may
+            be `/data/uranus/background`. Note that background subtraction will
+            require the background data to be already reduced to `stage1`. If no 
+            `background_path` is specified (the default), then no background subtraction
+            will be performed.""",
+    )
+    parser.add_argument(
+        '--basic_navigation',
+        action='store_true',
+        help="""Use basic navigation, and only save RA and Dec backplanes (e.g. useful
+            for small bodies). By default, full navigation is performed, generating a
+            full set of coordinate backplanes (lon/lat, illumination angles etc.). Using
+            basic navigation automatically skips the animation step. This
+            is mainly useful if you get SPICE errors when navigating the data.""",
+    )
+    parser.add_argument(
+        '--step_kwargs',
+        '--kwargs',
+        type=str,
+        help="""JSON string containing keyword arguments to pass to individual pipeline
+            steps. For example, 
+            `--kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "animate": {"radius_factor": 2.5}}'` 
+            will pass the custom arguments to the stage3 and animation steps.
+            """,
+    )
+    parser.add_argument(
+        '--skip_steps',
+        nargs='+',
+        type=str,
+        help="""List of steps to skip. This is generally only useful if you are
+            re-running part of the pipeline. Multiple steps can be passed as a
+            space-separated list. For example, `--skip_steps flat despike`.""",
+    )
+    parser.add_argument(
+        '--start_step',
+        type=str,
+        help="""Convenience argument to add all steps before `start_step` to 
+            `skip_steps`.""",
+    )
+    parser.add_argument(
+        '--end_step',
+        type=str,
+        help="""Convenience argument to add all steps steps after `end_step` to 
+            `skip_steps`.""",
+    )
+    return parser
 
 
 if __name__ == '__main__':
     import sys
 
-    # TODO delete this
+    # TODO delete this block
 
     if sys.argv[1] == 'MIRI':
         pipeline = MiriPipeline(
@@ -1077,12 +1173,9 @@ if __name__ == '__main__':
             defringe=False,
             flat_data_path=os.path.join(
                 '~/Dropbox/science/jwst_data',
-                'MIRI_IFU/Saturn_2022nov13/flat_field/merged',
+                'MIRI_IFU/Saturn_2022nov13/2023-06-21_reduction/flat_field/merged',
                 'ch{channel}-{band}_constructed_flat{fringe}.fits',
             ),
+            background_path='~/Downloads/test/MIRI_background',
         )
-        pipeline.run(start_step='stage2')
-
-    if sys.argv[1] == 'NIRSpec':
-        pipeline = NirspecPipeline('~/Downloads/test/NIRSpec', desaturate=False)
-        pipeline.run()
+        pipeline.run(start_step='flat', skip_steps={'despike'})

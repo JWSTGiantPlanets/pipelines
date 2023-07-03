@@ -88,7 +88,7 @@ def make_summary_plot(
     show: bool = False,
     vmin_percentile: float = 0,
     vmax_percentile: float = 100,
-    plot_brightest_spectrum: bool = False,
+    plot_brightest_spectrum: bool = True,
 ):
     """
     Create and save a summary plot of a JWST observation.
@@ -136,9 +136,9 @@ def make_summary_plot(
         else:
             lon_img = hdul['LON'].data  # type: ignore
 
-        if primary_header.get('S_BKGSUB'):
+        if primary_header.get('S_BKDSUB') == 'COMPLETE':
             reduction_notes.append('Background subtracted')
-        if primary_header.get('S_RESFRI'):
+        if primary_header.get('S_RESFRI') == 'COMPLETE':
             reduction_notes.append('Residual fringe corrected')
         reduction_notes.extend(get_header_reduction_notes(hdul))
     instrument = primary_header['INSTRUME']
@@ -326,7 +326,7 @@ def make_summary_plot(
         ax.set_ylabel(ax.get_ylabel() + ' (linear scale)')
     else:
         ax.set_yscale('log')
-    if instrument == 'NIRSPEC':
+    if instrument == 'NIRSPEC' or ax.get_ylim()[0] < 0.5:
         ylim = ax.get_ylim()
         ymin = max(
             ylim[0], min(max(np.nanpercentile(sp, 5) / 10, 5e-2), np.nanmin(sp_max))
