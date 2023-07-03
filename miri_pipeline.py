@@ -484,8 +484,7 @@ class MiriPipeline(Pipeline):
             paths_in = self.get_paths(root_path, dir_in, '*cal.fits')
             if 'bg' in self.data_variants_individual:
                 paths_in += self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
-            args_list = [(p, os.path.basename(p), kwargs) for p in paths_in]
-            self.log(f'Processing {len(args_list)} files...', time=False)
+            args_list = [(p, os.path.dirname(p), kwargs) for p in paths_in]
             runmany(
                 self.defringe_fn,
                 args_list,
