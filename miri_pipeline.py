@@ -446,7 +446,7 @@ class MiriPipeline(Pipeline):
         start_step: Step | None,
         end_step: Step | None,
     ) -> set[Step]:
-        skip_steps = super().process_steps_list(skip_steps, start_step, end_step)
+        skip_steps = super().process_skip_steps(skip_steps, start_step, end_step)
         if not self.defringe:
             skip_steps.add('defringe')
         return skip_steps
@@ -535,7 +535,7 @@ class MiriPipeline(Pipeline):
             hdr = hdul['PRIMARY'].header  #  type: ignore
         channel = hdr['CHANNEL']
         abc = BAND_ABC_ALIASES[hdr['BAND'].casefold().strip()]
-        return f'{channel}{abc}'
+        return f'{channel}{abc}_'
 
 
 def main():
