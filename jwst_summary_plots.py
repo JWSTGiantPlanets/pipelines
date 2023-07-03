@@ -123,6 +123,7 @@ def make_summary_plot(
     data_row = 4
     sat_row = 5
 
+    reduction_notes = []
     with fits.open(path_in) as hdul:
         data = hdul['SCI'].data  # type: ignore
         primary_header = hdul['PRIMARY'].header  # type: ignore
@@ -134,7 +135,12 @@ def make_summary_plot(
             lon_img = np.full_like(ra_img, np.nan)
         else:
             lon_img = hdul['LON'].data  # type: ignore
-        reduction_notes = get_header_reduction_notes(hdul)
+
+        if primary_header.get('S_BKGSUB'):
+            reduction_notes.append('Background subtracted')
+        if primary_header.get('S_RESFRI'):
+            reduction_notes.append('Residual fringe corrected')
+        reduction_notes.extend(get_header_reduction_notes(hdul))
     instrument = primary_header['INSTRUME']
 
     wl = get_wavelengths(data_header)
@@ -272,16 +278,18 @@ def make_summary_plot(
         title_parts.append(
             'Channel {} {}'.format(primary_header['CHANNEL'], primary_header['BAND'])
         )
-        if primary_header['S_RESFRI'] == 'COMPLETE':
-            title_parts.append('Residual fringe corrected')
+        # if primary_header['S_RESFRI'] == 'COMPLETE':
+        #     title_parts.append('Residual fringe corrected')
     if instrument == 'NIRSPEC':
         title_parts.append(
-            '{} {} {}'.format(
-                primary_header['DETECTOR'],
+            '{} {}'.format(
                 primary_header['FILTER'],
                 primary_header['GRATING'],
             )
         )
+        detector = primary_header['DETECTOR']
+        if detector != 'MULTIPLE':
+            title_parts[-1] = str(detector) + ' ' + title_parts[-1]
     ax.set_title('  |  '.join(title_parts))
 
     ax = ax_sp
