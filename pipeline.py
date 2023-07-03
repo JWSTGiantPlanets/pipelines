@@ -19,6 +19,7 @@ from jwst.residual_fringe import ResidualFringeStep
 import background_subtraction
 import desaturate_data
 import despike_data
+import flat_field
 import jwst_summary_animation
 import jwst_summary_plots
 import navigate_jwst_observations
@@ -72,6 +73,12 @@ MIRI_STAGE_DIRECTORIES_TO_PLOT = (
     'stage5_despike',
     'stage6_background',
 )
+MIRI_STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
+    'defringe': ('stage2', 'stage2'),
+    'flat': ('', 'stage4_flat'),
+    'despike': ('stage4_flat', 'stage5_despike'),
+}
+MIRI_BAND_ABC_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
 
 NIRSPEC_STEPS = (
     'remove_groups',
@@ -98,6 +105,10 @@ NIRSPEC_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
         }
     },
 }
+NIRSPEC_STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
+    'despike': ('', 'stage4_despike')
+}
+
 NIRSPEC_STAGE_DIRECTORIES_TO_PLOT = (
     'stage3',
     'stage3_desaturated',
@@ -176,6 +187,8 @@ class Pipeline:
             'navigate': ('stage3', 'stage3'),
             'desaturate': ('stage3', 'stage3_desaturated'),
             # later steps overriden in subclasses
+            'plot': ('', 'plots'),
+            'animate': ('', 'animation'),
         }
 
     @property
@@ -392,9 +405,10 @@ class Pipeline:
             - d1_bg_fringe
         etc.
         """
+        variants = set()
         if self.background_subtract:
-            return {'bg'}
-        return set()
+            variants.add('bg')
+        return variants
 
     @property
     def data_variant_combinations(self) -> set[frozenset[str]]:
@@ -447,7 +461,7 @@ class Pipeline:
         else:
             hdr = path
         keys = ('CHANNEL', 'BAND', 'DETECTOR', 'FILTER', 'GRATING')
-        return tuple(hdr.get(k, None) for k in keys) # type: ignore
+        return tuple(hdr.get(k, None) for k in keys)  # type: ignore
 
     # Pipeline steps -------------------------------------------------------------------
     # remove_groups
@@ -465,7 +479,6 @@ class Pipeline:
             paths_in = self.get_paths(dir_in, '*.fits')
             output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
-            self.log(f'Output directory: {output_dir!r}', time=False)
             check_path(output_dir)
             runmany(
                 self.reduction_detector1_fn,
@@ -756,16 +769,80 @@ class Pipeline:
 
     # plot
     def run_plot(self, kwargs: dict[str, Any]) -> None:
-        dir_in, dir_out = self.step_directories['plot']
+        _, dir_out = self.step_directories['plot']
         for root_path in self.iterate_group_root_paths():
-            # TODO deal with stages to plot here
-            # TODO add prefixes here
-            pass
+            paths = []
+            for stage_dir in self.stage_directories_to_plot:
+                paths_in = self.get_paths(
+                    root_path, stage_dir, '*', '*_nav.fits', filter_variants=True
+                )
+                for p_in in paths_in:
+                    dirname = os.path.dirname(
+                        self.replace_path_part(
+                            p_in, -3, os.path.join(dir_out, stage_dir), old=stage_dir
+                        )
+                    )
+                    filename = self.get_plot_filename_prefix(p_in) + os.path.basename(
+                        self.replace_path_suffix(p_in, '.png', old='.fits')
+                    )
+                    p_out = os.path.join(dirname, filename)
+                    paths.append((p_in, p_out))
+            args_list = [(p_in, p_out, kwargs) for p_in, p_out in paths]
+            runmany(self.plot_fn, args_list, desc='plot', **self.parallel_kwargs)
 
-    # TODO animate
+    @staticmethod
+    def plot_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+        p_in, p_out, kwargs = args
+        jwst_summary_plots.make_summary_plot(p_in, p_out, **kwargs)
+
+    def get_plot_filename_prefix(self, path: str) -> str:
+        """
+        Get filename prefix to use for plots/animations e.g. '1A_' for MIRI.
+        """
+        return ''
+
+    # animate
+    def run_animate(self, kwargs: dict[str, Any]) -> None:
+        _, dir_out = self.step_directories['animate']
+        paths_dict: dict[str, list[str]] = {}
+        for stage_dir in self.stage_directories_to_plot:
+            # use d* as dither path as we don't want to use combined dithers here
+            paths_in = self.get_paths(
+                stage_dir, 'd*', '*_nav.fits', filter_variants=True
+            )
+            for p_in in paths_in:
+                variant_dir = pathlib.Path(p_in).parts[-2].split('_')[1:]
+                variant_dir = 'dither_comparison_' + '_'.join(variant_dir)
+                variant_dir = variant_dir.rstrip('_')
+                dirname = os.path.join(self.root_path, dir_out, stage_dir, variant_dir)
+                filename = self.get_plot_filename_prefix(p_in) + os.path.basename(
+                    self.replace_path_suffix(p_in, '.mp4', old='.fits')
+                )
+                p_out = os.path.join(dirname, filename)
+                paths_dict.setdefault(p_out, []).append(p_in)
+        args_list = [
+            (paths_in, p_out, kwargs) for p_out, paths_in in paths_dict.items()
+        ]
+        runmany(self.animate_fn, args_list, desc='animate', **self.parallel_kwargs)
+
+    @staticmethod
+    def animate_fn(args: tuple[list[str], str, dict[str, Any]]) -> None:
+        paths_in, p_out, kwargs = args
+        jwst_summary_animation.make_animation(paths_in, p_out, **kwargs)
 
 
 class MiriPipeline(Pipeline):
+    def __init__(
+        self,
+        *args,
+        flat_data_path: str,
+        defringe: bool | Literal['both'] = 'both',
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.flat_data_path = flat_data_path
+        self.defringe = defringe
+
     @property
     def instrument(self) -> str:
         return 'MIRI'
@@ -780,7 +857,12 @@ class MiriPipeline(Pipeline):
 
     @property
     def step_directories(self) -> dict[Step, tuple[str, str]]:
-        return super().step_directories | {}  # TODO
+        directories = super().step_directories | MIRI_STEP_DIRECTORIES
+
+        dir_in = 'stage3_desaturated' if self.desaturate else 'stage3'
+        directories['flat'] = (dir_in, directories['flat'][1])
+
+        return directories
 
     @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
@@ -793,12 +875,16 @@ class MiriPipeline(Pipeline):
         end_step: Step | None,
     ) -> set[Step]:
         skip_steps = super().process_skip_steps(skip_steps, start_step, end_step)
-        # TODO defringe stuff
+        if not self.defringe:
+            skip_steps.add('defringe')
         return skip_steps
 
     @property
     def data_variants_individual(self) -> set[str]:
-        return super().data_variants_individual | {'fringe'}
+        variants = super().data_variants_individual
+        if self.defringe:
+            variants.add('fringe')
+        return variants
 
     # Step overrides
     @staticmethod
@@ -817,15 +903,13 @@ class MiriPipeline(Pipeline):
         return super().reduction_detector1_fn((path_in, output_dir, kwargs))
 
     def run_defringe(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['defringe']
         for root_path in self.iterate_group_root_paths():
-            paths_in = self.get_paths('stage2', '*cal.fits')
+            paths_in = self.get_paths(root_path, dir_in, '*cal.fits')
             if 'bg' in self.data_variants_individual:
-                paths_in += self.get_paths('stage2', 'bg', '*cal.fits')
-            output_dir = os.path.join(root_path, 'stage2')
-            args_list = [(p, output_dir, kwargs) for p in paths_in]
-            self.log(f'Output directory: {output_dir!r}', time=False)
+                paths_in += self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
+            args_list = [(p, os.path.basename(p), kwargs) for p in paths_in]
             self.log(f'Processing {len(args_list)} files...', time=False)
-            check_path(output_dir)
             runmany(
                 self.defringe_fn,
                 args_list,
@@ -855,6 +939,30 @@ class MiriPipeline(Pipeline):
             return self.get_paths(dir_in, '*residual_fringe.fits')
         raise ValueError(f'Unknown variant: {variant}')
 
+    def run_flat(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['flat']
+        self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
+        # Use d* to skip dither combined files
+        paths_in = self.get_paths(dir_in, 'd*', '*_nav.fits', filter_variants=True)
+        self.log(f'Processing {len(paths_in)} files...', time=False)
+        for p_in in tqdm.tqdm(paths_in, desc='flat'):
+            p_out = self.replace_path_part(p_in, -3, dir_out, old=dir_in)
+            with fits.open(p_in) as hdul:
+                hdr = hdul['PRIMARY'].header  #  type: ignore
+            p_flat = self.flat_data_path.format(
+                channel=hdr['CHANNEL'],
+                band=hdr['BAND'].lower(),
+                fringe='_fringe' if hdr['S_RESFRI'] == 'COMPLETE' else '',
+            )
+            flat_field.apply_flat(p_in, p_out, p_flat, **kwargs)
+
+    def get_plot_filename_prefix(self, path: str) -> str:
+        with fits.open(path) as hdul:
+            hdr = hdul['PRIMARY'].header  #  type: ignore
+        channel = hdr['CHANNEL']
+        abc = MIRI_BAND_ABC_ALIASES[hdr['BAND'].casefold().strip()]
+        return f'{channel}{abc}'
+
 
 class NirspecPipeline(Pipeline):
     @property
@@ -871,7 +979,12 @@ class NirspecPipeline(Pipeline):
 
     @property
     def step_directories(self) -> dict[Step, tuple[str, str]]:
-        return super().step_directories | {}  # TODO
+        directories = super().step_directories | NIRSPEC_STEP_DIRECTORIES
+
+        dir_in = 'stage3_desaturated' if self.desaturate else 'stage3'
+        directories['despike'] = (dir_in, directories['despike'][1])
+
+        return directories
 
     @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
