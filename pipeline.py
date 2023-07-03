@@ -26,6 +26,8 @@ import remove_groups
 from parallel_tools import runmany
 from tools import check_path
 
+# TODO docstrings
+
 Step: TypeAlias = Literal[
     'remove_groups',
     'stage1',
@@ -36,7 +38,6 @@ Step: TypeAlias = Literal[
     'desaturate',
     'flat',
     'despike',
-    'background',
     'plot',
     'animate',
 ]
@@ -51,13 +52,11 @@ MIRI_STEPS = (
     'desaturate',
     'flat',
     'despike',
-    'background',
     'plot',
     'animate',
 )
 MIRI_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
     'stage2': {'steps': {'cube_build': {'skip': True}, 'extract_1d': {'skip': True}}},
-    'defringe': {'skip': False},
     'stage3': {
         'steps': {
             'master_background': {'skip': True},
@@ -82,7 +81,6 @@ NIRSPEC_STEPS = (
     'navigate',
     'desaturate',
     'despike',
-    'background',
     'plot',
     'animate',
 )
@@ -116,13 +114,13 @@ class Pipeline:
         parallel: float | bool = False,
         desaturate: bool = True,
         groups_to_use: list[int] | None = None,
+        background_subtract: bool | Literal['both'] = 'both',
         background_path: str | None = None,
         basic_navigation: bool = False,
         step_kwargs: dict[Step, dict[str, Any]] | None = None,
         parallel_kwargs: dict[str, Any] | None = None,
         reduction_parallel_kwargs: dict[str, Any] | None = None,
     ):
-        # TODO docstring
         parallel_kwargs = dict(
             parallel_frac=parallel,
             timeout=60 * 60,
@@ -145,6 +143,7 @@ class Pipeline:
         self.root_path = self.standardise_path(root_path)
         self.desaturate = desaturate
         self.groups_to_use = groups_to_use
+        self.background_subtract = background_subtract
         self.background_path = self.standardise_path(background_path)
         self.basic_navigation = basic_navigation
 
@@ -173,7 +172,6 @@ class Pipeline:
             'remove_groups': ('stage0', 'stage0'),
             'stage1': ('stage0', 'stage1'),
             'stage2': ('stage1', 'stage2'),
-            'defringe': ('stage2', 'stage2'),
             'stage3': ('stage2', 'stage3'),
             'navigate': ('stage3', 'stage3'),
             'desaturate': ('stage3', 'stage3_desaturated'),
@@ -192,7 +190,6 @@ class Pipeline:
         start_step: Step | None = None,
         end_step: Step | None = None,
     ):
-        # TODO docstring
         skip_steps = self.process_skip_steps(skip_steps, start_step, end_step)
         self.log(f'Running {self.instrument} pipeline')
         self.print_reduction_info(skip_steps)
@@ -249,8 +246,6 @@ class Pipeline:
         # Add skip steps dependent on provided arguments
         if not self.desaturate:
             skip_steps.add('desaturate')
-        if self.background_path is None:
-            skip_steps.add('background')  # TODO update this if the bg step changes?
         if self.basic_navigation:
             skip_steps.add('animate')
         return skip_steps
@@ -268,6 +263,8 @@ class Pipeline:
         self.log(f'Desaturate: {self.desaturate!r}', time=False)
         if self.groups_to_use:
             self.log(f'Groups to keep: {self.groups_to_use!r}', time=False)
+        self.log(f'Background subtract: {self.background_subtract!r}', time=False)
+        self.log(f'Background path: {self.background_path!r}', time=False)
         if self.basic_navigation:
             self.log(f'Basic navigation: {self.basic_navigation!r}', time=False)
 
@@ -395,6 +392,8 @@ class Pipeline:
             - d1_bg_fringe
         etc.
         """
+        if self.background_subtract:
+            return {'bg'}
         return set()
 
     @property
@@ -438,6 +437,18 @@ class Pipeline:
         """
         return [p for p in paths if self.test_path_for_data_variants(p)]
 
+    def get_file_match_key(self, path: str | fits.Header) -> tuple[str | None, ...]:
+        """
+        Get a key used to e.g. match background and science files.
+        """
+        if isinstance(path, str):
+            with fits.open(path) as hdul:
+                hdr = hdul['PRIMARY'].header  #  type: ignore
+        else:
+            hdr = path
+        keys = ('CHANNEL', 'BAND', 'DETECTOR', 'FILTER', 'GRATING')
+        return tuple(hdr.get(k, None) for k in keys) # type: ignore
+
     # Pipeline steps -------------------------------------------------------------------
     # remove_groups
     def run_remove_groups(self, kwargs: dict[str, Any]) -> None:
@@ -473,12 +484,58 @@ class Pipeline:
     # stage2
     def run_stage2(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['stage2']
+
+        if self.background_subtract and self.background_path is None:
+            self.log(
+                'No background path provided so skipping background subtraction',
+                time=False,
+            )
+            background_options = [False]
+        elif self.background_subtract == 'both':
+            self.log(
+                'Producing background subtracted and non-background subtracted data',
+                time=False,
+            )
+            background_options = [True, False]
+        elif self.background_subtract == True:
+            self.log('Only producing background subtracted data', time=False)
+            background_options = [True]
+        else:
+            self.log('Only producing non-background subtracted data', time=False)
+            background_options = [False]
+
+        background_path_dict = self.get_background_path_dict()
+        if True in background_options:
+            self.log(f'Background path: {self.background_path!r}', time=False)
+            self.log(
+                f'Found {len(background_path_dict)} background files to consider',
+                time=False,
+            )
+
         for root_path in self.iterate_group_root_paths():
             paths_in = self.get_paths(dir_in, '*rate.fits')
-            output_dir = os.path.join(root_path, dir_out)
-            args_list = [(p, output_dir, kwargs) for p in paths_in]
-            self.log(f'Output directory: {output_dir!r}', time=False)
-            check_path(output_dir)
+            args_list: list[tuple[str, str, dict[str, Any]]] = []
+            for background in background_options:
+                output_dir = os.path.join(root_path, dir_out)
+                check_path(output_dir)
+                if background:
+                    output_dir = os.path.join(output_dir, 'bg')
+                for p_in in paths_in:
+                    if background:
+                        try:
+                            bg_paths = background_path_dict[
+                                self.get_file_match_key(p_in)
+                            ]
+                        except KeyError:
+                            self.log(
+                                f'WARNING: no background file found for {p_in!r}, skipping'
+                            )
+                            continue
+                    else:
+                        bg_paths = None
+                    asn_path = self.write_asn_for_stage2(p_in, bg_paths)
+                    args_list.append((asn_path, output_dir, kwargs))
+
             runmany(
                 self.reduction_spec2_fn,
                 args_list,
@@ -491,15 +548,148 @@ class Pipeline:
         path_in, output_dir, kwargs = args
         Spec2Pipeline.call(path_in, output_dir=output_dir, save_results=True, **kwargs)
 
-    # TODO background
+    def get_background_path_dict(self) -> dict[tuple[str | None, ...], list[str]]:
+        """
+        Get dictionary of background paths keyed by the match key.
+        """
+        if self.background_path is None:
+            return {}
+        dir_in, dir_out = self.step_directories['stage2']
+        paths = sorted(
+            glob.glob(os.path.join(self.background_path, dir_in, '*rate.fits'))
+        )
+        out: dict[tuple[str | None, ...], list[str]] = {}
+        for p in paths:
+            key = self.get_file_match_key(p)
+            out.setdefault(key, []).append(p)
+        return out
+
+    def write_asn_for_stage2(
+        self,
+        science_path: str,
+        bg_paths: list[str] | None = None,
+    ) -> str:
+        asn = asn_from_list([science_path])
+        if bg_paths is not None:
+            for bg_path in bg_paths:
+                asn['products'][0]['members'].append(
+                    {'expname': bg_paths, 'exptype': 'background'}
+                )
+        asn_path = os.path.join(
+            os.path.dirname(science_path),
+            os.path.basename(science_path).replace(
+                '.fits', ('_bg' if bg_paths is not None else '') + '_asn.json'
+            ),
+        )
+        _, serialized = asn.dump()
+        with open(asn_path, 'w', encoding='utf-8') as f:
+            f.write(serialized)
+        return asn_path
 
     # stage3
     def run_stage3(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['stage3']
         for root_path in self.iterate_group_root_paths():
-            # TODO deal with variants here
-            # TODO stage3 stuff
-            pass
+            paths_list: list[tuple[str, str]] = []
+            for variant in self.data_variant_combinations:
+                variant_dirname = '_'.join(sorted(variant))
+                if len(variant) > 0:
+                    variant_dirname = f'_{variant_dirname}'
+                paths_in = self.get_stage3_variant_paths_in(variant)
+                grouped_files = self.group_stage2_files_for_stage3(paths_in)
+
+                # Only need to include the tile in prodname if it is needed to avoid
+                # filename collisions for observations which use mosaicing. Most
+                # observations just have a single tile per datset, so we can just use
+                # the standard prodname in this case.
+                keys_with_tiles = set(grouped_files.keys())
+                keys_without_tiles = set(
+                    (dither, match_key) for dither, tile, match_key in keys_with_tiles
+                )
+                include_tile_in_prodname = len(keys_with_tiles) != len(
+                    keys_without_tiles
+                )
+
+                for (dither, tile, match_key), paths_in in grouped_files.items():
+                    dirname = 'combined' if dither is None else f'dither{dither}'
+                    dirname = dirname + variant_dirname
+                    output_dir = os.path.join(root_path, dir_out, dirname)
+                    check_path(output_dir)
+
+                    match_key_string = '_'.join(k for k in match_key if k is not None)
+                    asn_path = os.path.join(
+                        output_dir,
+                        f'l3asn-{tile}_{match_key_string}_dither-{dirname}.json',
+                    )
+                    prodname = 'Level3' + (
+                        f'_{tile}' if include_tile_in_prodname else ''
+                    )
+                    self.write_asn_for_stage3(paths_in, asn_path, prodname=prodname)
+                    paths_list.append((asn_path, output_dir))
+
+            args_list = [
+                (p, output_dir, kwargs) for p, output_dir in sorted(paths_list)
+            ]
+            runmany(
+                self.reduction_spec3_fn,
+                args_list,
+                desc='stage3',
+                **self.reduction_parallel_kwargs,
+            )
+
+    @staticmethod
+    def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
+        asn_path, output_dir, kwargs = args
+        Spec3Pipeline.call(
+            asn_path,
+            output_dir=output_dir,
+            save_results=True,
+            **kwargs,
+        )
+
+    def get_stage3_variant_paths_in(self, variant: frozenset[str]) -> list[str]:
+        """
+        Get list of input paths for a given variant for stage3.
+        """
+        dir_in, dir_out = self.step_directories['stage3']
+        if variant == frozenset():
+            return self.get_paths(dir_in, '*cal.fits')
+        elif variant == frozenset({'bg'}):
+            return self.get_paths(dir_in, 'bg', '*cal.fits')
+        raise ValueError(f'Unknown variant: {variant}')
+
+    def group_stage2_files_for_stage3(
+        self, paths_in: list[str]
+    ) -> dict[tuple[int | None, str, tuple[str | None, ...]], list[str]]:
+        out: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]] = {}
+        for p_in in paths_in:
+            with fits.open(p_in) as hdul:
+                hdr = hdul[0].header  #  type: ignore
+            dither = int(hdr['PATT_NUM'])
+            tile = hdr['ACT_ID']
+            match_key = self.get_file_match_key(hdr)
+
+            # Do both separated (dither, ...) and combined (None, ....) dithers
+            for k in [
+                (dither, tile, match_key),
+                (None, tile, match_key),
+            ]:
+                out.setdefault(k, []).append(p_in)
+        return out
+
+    def write_asn_for_stage3(
+        self, files: list[str], asn_path: str, prodname: str, **kwargs
+    ) -> str:
+        asn = asn_from_list(files, rule=DMS_Level3_Base, product_name=prodname)
+        if 'bg' in kwargs:
+            for bgfile in kwargs['bg']:
+                asn['products'][0]['members'].append(
+                    {'expname': bgfile, 'exptype': 'background'}
+                )
+        _, serialized = asn.dump()
+        with open(asn_path, 'w', encoding='utf-8') as outfile:
+            outfile.write(serialized)
+        return asn_path
 
     # navigate
     def run_navigate(self, kwargs: dict[str, Any]) -> None:
@@ -571,8 +761,9 @@ class Pipeline:
             # TODO deal with stages to plot here
             # TODO add prefixes here
             pass
-        
+
     # TODO animate
+
 
 class MiriPipeline(Pipeline):
     @property
@@ -628,6 +819,8 @@ class MiriPipeline(Pipeline):
     def run_defringe(self, kwargs: dict[str, Any]) -> None:
         for root_path in self.iterate_group_root_paths():
             paths_in = self.get_paths('stage2', '*cal.fits')
+            if 'bg' in self.data_variants_individual:
+                paths_in += self.get_paths('stage2', 'bg', '*cal.fits')
             output_dir = os.path.join(root_path, 'stage2')
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             self.log(f'Output directory: {output_dir!r}', time=False)
@@ -646,6 +839,21 @@ class MiriPipeline(Pipeline):
         ResidualFringeStep.call(
             path_in, output_dir=output_dir, save_results=True, **kwargs
         )
+
+    def get_stage3_variant_paths_in(self, variant: frozenset[str]) -> list[str]:
+        """
+        Get list of input paths for a given variant for stage3.
+        """
+        dir_in, dir_out = self.step_directories['stage3']
+        if variant == frozenset():
+            return self.get_paths(dir_in, '*cal.fits')
+        elif variant == frozenset({'bg'}):
+            return self.get_paths(dir_in, 'bg', '*cal.fits')
+        elif variant == frozenset({'bg', 'fringe'}):
+            return self.get_paths(dir_in, 'bg', '*residual_fringe.fits')
+        elif variant == frozenset({'fringe'}):
+            return self.get_paths(dir_in, '*residual_fringe.fits')
+        raise ValueError(f'Unknown variant: {variant}')
 
 
 class NirspecPipeline(Pipeline):

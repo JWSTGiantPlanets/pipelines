@@ -641,7 +641,7 @@ def group_stage2_files_for_stage3(
 
 def write_asn_for_stage3(
     files: list[str], asnfile: str, prodname: str, **kwargs
-) -> None:
+) -> str:
     asn = asn_from_list(files, rule=DMS_Level3_Base, product_name=prodname)
     if 'bg' in kwargs:
         for bgfile in kwargs['bg']:
@@ -651,7 +651,7 @@ def write_asn_for_stage3(
     _, serialized = asn.dump()
     with open(asnfile, 'w', encoding='utf-8') as outfile:
         outfile.write(serialized)
-
+    return asnfile
 
 def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
     asn_path, output_dir, kwargs = args
