@@ -796,15 +796,15 @@ class Pipeline:
 
         # Group paths by their relative path to the group root path
         paths_dict: dict[str, list[str]] = {}
-        for root_path in self.iterate_group_root_paths():
+        for group_root_path in self.iterate_group_root_paths():
             paths_in = self.get_paths(
-                root_path, dir_in, '*', '*_nav.fits', filter_variants=True
+                group_root_path, dir_in, '*', '*_nav.fits', filter_variants=True
             )
             for p_in in paths_in:
                 # get file path relative to the root of the group root path
-                relpath = os.path.relpath(p_in, root_path)
+                relpath = os.path.relpath(p_in, group_root_path)
                 relpath = self.replace_path_part(relpath, -3, dir_out, old=dir_in)
-                p_out = os.path.join(root_path, relpath)
+                p_out = os.path.join(self.root_path, relpath)
                 paths_dict.setdefault(p_out, []).append(p_in)
 
         args_list = [
