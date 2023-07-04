@@ -77,6 +77,8 @@ DATA_CMAP = 'plasma'
 SATURATION_CMAP = 'YlOrRd'
 SATURATION_COLOR = 'r'
 
+# TODO make sp_max auto by default?
+
 
 def main(p_in, p_out):
     make_summary_plot(p_in, p_out)
@@ -298,7 +300,7 @@ def make_summary_plot(
     sp_max = sp_fn(data[:, data_to_use], axis=1)
 
     if plot_brightest_spectrum:
-        ax.plot(wl, sp_max, color='tab:blue', linewidth=1)
+        ax.plot(wl, sp_max, color='tab:blue', alpha=0.667, linewidth=1)
     ax.plot(wl, sp, color='k', linewidth=1)
     if plot_brightest_spectrum:
         for s, c in [
