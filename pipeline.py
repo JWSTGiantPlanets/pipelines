@@ -443,7 +443,7 @@ class Pipeline:
         for idx, root_path in enumerate(group_root_paths):
             if len(group_root_paths) > 1:
                 self.log(
-                    f'Processing group directory {idx+1}/{len(group_root_paths)} ({root_path!r})'
+                    f'Processing group directory {idx+1}/{len(group_root_paths)}: {root_path!r}'
                 )
             yield root_path
 
