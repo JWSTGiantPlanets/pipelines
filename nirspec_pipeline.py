@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-f"""
+"""
 Full JWST reduction pipeline for NIRSpec IFU data, including the standard reduction from
 stage0 to stage3, and custom pipeline steps for additional cleaning and data 
 visualisation.
@@ -387,7 +387,7 @@ class NirspecPipeline(Pipeline):
     # Step overrides
     def reduction_spec2_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         try:
-            return super().reduction_spec2_fn(args)
+            super().reduction_spec2_fn(args)
         except NoDataOnDetectorError:
             path_in, output_dir, kwargs = args
             print(f'No data on detector for {path_in!r}, skipping')

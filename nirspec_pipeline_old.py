@@ -659,6 +659,7 @@ def write_asn_for_stage3(
         outfile.write(serialized)
     return asnfile
 
+
 def reduction_spec3_fn(args: tuple[str, str, dict[str, Any]]) -> None:
     asn_path, output_dir, kwargs = args
     Spec3Pipeline.call(

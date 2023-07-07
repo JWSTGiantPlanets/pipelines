@@ -13,7 +13,6 @@ from typing import Any, Collection, Generator, Literal, Type, TypeAlias, cast, o
 
 import tqdm
 from astropy.io import fits
-from jwst.assign_wcs.util import NoDataOnDetectorError
 from jwst.associations.asn_from_list import asn_from_list
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
@@ -521,6 +520,7 @@ class Pipeline:
 
     # Pipeline steps -------------------------------------------------------------------
     # remove_groups
+    # pylint: disable-next=unused-argument
     def run_remove_groups(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['remove_groups']
         paths_in = self.get_paths(dir_in, '*_uncal.fits')
@@ -865,6 +865,7 @@ class Pipeline:
         p_in, p_out, kwargs = args
         jwst_summary_plots.make_summary_plot(p_in, p_out, **kwargs)
 
+    # pylint: disable-next=unused-argument
     def get_plot_filename_prefix(self, path: str) -> str:
         """
         Get filename prefix to use for plots/animations e.g. '1A_' for MIRI.
@@ -1041,7 +1042,7 @@ class MiriPipeline(Pipeline):
 
 
 def get_pipeline_argument_parser(
-    pipeline: Type[Pipeline],
+    pipeline_class: Type[Pipeline],
     step_descriptions: str,
     cli_examples: str,
 ) -> argparse.ArgumentParser:
@@ -1052,7 +1053,7 @@ def get_pipeline_argument_parser(
     `run_pipeline(**vars(parser.parse_args()))` to run the pipeline.
     """
     suffix = step_descriptions + '\n' + cli_examples
-    name = pipeline.get_instrument()
+    name = pipeline_class.get_instrument()
     parser = argparse.ArgumentParser(
         description=(
             f'Full JWST {name} IFU pipeline including the standard reduction from '
