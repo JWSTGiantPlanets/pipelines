@@ -7,6 +7,8 @@ visualisation.
 
 See STEP_DESCRIPTIONS below for a description of each step in this pipeline.
 
+GitHub repository: https://github.com/JWSTGiantPlanets/pipelines
+
 
 Setup
 =====
@@ -44,22 +46,49 @@ Usage
 =====
 The pipeline can be run from the command line, or imported and run from Python. To run
 the pipeline to fully reduce a dataset, simply download the stage0 (e.g. to 
-`/data/saturn/SATURN-15N/stage0`), then run the following command on the command line ::
+`/data/uranus/lon1/stage0`), then run the following command on the command line ::
 
-    python3 miri_pipeline.py /data/saturn/SATURN-15N
+    python3 miri_pipeline.py /data/uranus/lon1
 
 or from Python ::
 
     import miri_pipeline
-    miri_pipeline.run_pipeline('/data/saturn/SATURN-15N')
+    miri_pipeline.run_pipeline('/data/uranus/lon1')
 
 This will run the full pipeline, and output data files appropriate directories (e.g. 
-`/data/saturn/SATURN-15N/stage3`, `/data/saturn/SATURN-15N/plots` etc.).
+`/data/uranus/lon1/stage3`, `/data/uranus/lon1/plots` etc.).
 
-By default, the full pipeline is effectively run twice, first with the redisdual 
-defringe step disabled, then with it enabled. If you only want defringed or 
-non-defringed data, you can customise this behaviour with the `defringe` argument or the
-`--defringe` or `--no-defringe` flags.
+By default, most steps of the pipeline are effectively run twice, each step with the 
+residual defringe step disabled first, then with it enabled. If you only want defringed
+or non-defringed data, you can customise this behaviour with the `defringe` argument or 
+the `--defringe` or `--no-defringe` flags.
+
+If the pipeline is run with desaturation enabled, the pipeline flow is:
+- Firstly, multiple versions of the stage0 cubes are created with different numbers of 
+  groups (the `remove_groups` step).
+- `stage1` is run on e.g. the 4 group data, then the 3 group data, then the 2 group
+  data, then the 1 group data. Then `stage2` is run on the 4-1 group data, then 
+  `stage3`, then `navigate`.
+- The `desaturate` step is then run to combine the various group data into a single
+  desaturated dataset.
+- Subsequent pipeline steps (e.g. `plot`) are run on the desaturated data.
+
+Data cubes are saved at each step of the pipeline, with the data in each stage directory
+used as the input for the next stage. The `stage0`, `stage1` and `stage2` directories
+contain partially reduced data cubes. The `stage3` directory onwards contain reduced 
+data cubes which can be used for science. Within each science directory (`stage3`, 
+`stage4...` etc.), files are organised by dither and any data variant. For example:
+- `stage3/d1` contains the stage3 data for dither 1
+- `stage3/d2_bg` contains the stage3 data for dither 2 with the background subtracted
+- `stage3/d2_bg_fringe` contains the stage3 data for dither 2 with the background
+   subtracted and the residual fringes step run on the data
+- `stage3/combined` contains the stage4 data with all dithers combined
+- `stage4_flat/d3` contains the stage4 for dither 3
+
+The `plots` and `animation` directories contain quick look visualisations of the data.
+
+Metadata about the pipeline processing steps is saved in the `PRIMARY` FITS header of 
+each file.
 
 For more command line examples, see CLI_EXAMPLES below, and for more Python examples,
 see the docstring for `run_pipeline()` below.
@@ -94,12 +123,12 @@ etc., you may need to increase the walltime and decrease the number of nodes (pp
 
 To use this script you will need to:
 - replace `py310` in the `conda activate` line to the name of your conda environment
-- replace the two references to `/data/.../SATURN-15N` with the path to your data :: 
+- replace the two references to `/data/uranus/lon1` with the path to your data :: 
 
     #!/bin/bash
     #
     #PBS -N MIRI_Pipeline
-    #PBS -l walltime=18:00:00
+    #PBS -l walltime=24:00:00
     #PBS -l vmem=80gb
     #PBS -l nodes=1:ppn=8
     
@@ -116,20 +145,22 @@ To use this script you will need to:
     fi
 
     # Run the pipeline
-    python3 /data/nemesis/jwst/scripts/oliver/pipelines/miri_pipeline.py /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N --parallel
+    python3 /data/nemesis/jwst/scripts/oliver/pipelines/miri_pipeline.py /data/uranus/lon1 --parallel
     
     # Change permissions on modified files so that other users can use them
-    chmod -R --quiet 777 /data/nemesis/jwst/MIRI_IFU/Saturn_2022nov13/SATURN-15N
+    chmod -R --quiet 777 /data/uranus/lon1
     chmod -R --quiet 777 $CRDS_PATH
 """
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
-- `reduction`: Run the standard JWST reduction pipeline (stage0 to stage3).
+- `stage1`: Run the standard JWST reduction pipeline stage 1.
+- `stage2`: Run the standard JWST reduction pipeline stage 2 (including optional background subtraction).
+- `defringe`: Run the JWST reduction pipeline residual fringe step [optional].
+- `stage3`: Run the standard JWST reduction pipeline stage 3.
 - `navigate`: Navigate reduced files.
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
 - `flat`: Correct flat effects using synthetic flat field cubes.
 - `despike`: Clean cubes by removing extreme outlier pixels.
-- `background`: Subtract background from cubes [optional].
 - `plot`: Generate quick look summary plots of data.
 - `animate`: Generate summary animations of data.
 """
@@ -139,152 +170,129 @@ CLI_EXAMPLES = """examples:
 python3 miri_pipeline.py -h
 
 # Run the full pipeline, with all steps enabled
-python3 miri_pipeline.py /data/saturn/SATURN-15N
+python3 miri_pipeline.py /data/uranus/lon1
 
 # Run the full pipeline, without any desaturation
-python3 miri_pipeline.py /data/saturn/SATURN-15N --no-desaturate
+python3 miri_pipeline.py /data/uranus/lon1 --no-desaturate
 
 # Run the full pipeline, with only the defringed data
-python3 miri_pipeline.py /data/saturn/SATURN-15N --defringe
+python3 miri_pipeline.py /data/uranus/lon1 --defringe
 
 # Run the pipeline, including background subtraction
-python3 miri_pipeline.py /data/saturn/SATURN-15N --background_path /data/saturn/SATURN-BACKGROUND
+python3 miri_pipeline.py /data/uranus/lon1 --background_path /data/uranus/background
 
 # Run the pipeline, but stop before creating any visualisations
-python3 miri_pipeline.py /data/saturn/SATURN-15N --end_step despike
+python3 miri_pipeline.py /data/uranus/lon1 --end_step despike
+
+# Only run the plotting step
+python3 miri_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
 
 # Re-run the pipeline, skipping the initial reduction steps
-python3 miri_pipeline.py /data/saturn/SATURN-15N --start_step desaturate
+python3 miri_pipeline.py /data/uranus/lon1 --start_step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
-python3 miri_pipeline.py /data/saturn/SATURN-RINGS --kwargs '{"reduction": {"stages": [2, 3]}, "animation": {"radius_factor": 2.5}}'
+python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
 """
 import argparse
-import glob
-import json
 import os
-from typing import Any, Literal, TypeAlias
+from typing import Any, Collection, Literal
 
 import tqdm
+from astropy.io import fits
+from jwst.residual_fringe import ResidualFringeStep
 
-import background_subtraction
-import desaturate_data
-import despike_data
 import flat_field
-import jwst_summary_animation
-import jwst_summary_plots
-import navigate_jwst_observations
-import reduce_jwst_miri
-import remove_groups
 from parallel_tools import runmany
-from tools import KeepMissingDict, all_combinations, log
+from pipeline import Pipeline, Step, get_pipeline_argument_parser
 
-# Central record of the filepaths for various steps of the reduction pipeline
-PATH_FITS = os.path.join(
-    '{stage}',
-    'd{dither}{fringe}{nav}',
-    'Level3_ch{channel}-{band}_s3d{nav}.fits',
+# Pipeline constants for MIRI
+STEPS = (
+    'remove_groups',
+    'stage1',
+    'stage2',
+    'defringe',
+    'stage3',
+    'navigate',
+    'desaturate',
+    'flat',
+    'despike',
+    'plot',
+    'animate',
 )
-PATH_PLOT = os.path.join(
-    'plots',
-    '{stage}',
-    'd{dither}{fringe}',
-    '{channel}{abc}-Level3_ch{channel}-{band}_s3d.png',
-)
-PATH_ANIMATION = os.path.join(
-    'animation',
-    '{stage}',
-    'dither_comparison{fringe}',
-    '{channel}{abc}_animation.mp4',
-)
-PATH_STAGE3_RAW = PATH_FITS.format_map(KeepMissingDict(stage='stage3', nav=''))
-PATH_DATA = PATH_FITS.format_map(KeepMissingDict(nav='_nav'))
-PATH_NAVIGATED = PATH_DATA.format_map(KeepMissingDict(stage='stage3'))
-PATH_DESATURATED = PATH_DATA.format_map(KeepMissingDict(stage='stage3_desaturated'))
-PATH_FLAT = PATH_DATA.format_map(KeepMissingDict(stage='stage4_flat'))
-PATH_DESPIKED = PATH_DATA.format_map(KeepMissingDict(stage='stage5_despike'))
-PATH_BACKGROUND = PATH_DATA.format_map(KeepMissingDict(stage='stage6_background'))
-
-DATA_STAGES = [
+DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
+    'stage2': {
+        'steps': {
+            'cube_build': {'skip': True},
+            'extract_1d': {'skip': True},
+            'bkg_subtract': {'skip': False},
+        },
+    },
+    'stage3': {
+        'steps': {
+            'extract_1d': {'skip': True},
+            'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
+        }
+    },
+}
+STAGE_DIRECTORIES_TO_PLOT = (
     'stage3',
     'stage3_desaturated',
     'stage4_flat',
     'stage5_despike',
     'stage6_background',
-]
-
-# Get a useful default flat data path that works natively on Leicester's ALICE HPC
-_saturn_flat_path = os.path.join(
-    'MIRI_IFU/Saturn_2022nov13/flat_field/merged',
-    'ch{channel}-{band}_constructed_flat{fringe}.fits',
 )
-_path_options = [
-    os.path.join('/data/nemesis/jwst', _saturn_flat_path),
-    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', _saturn_flat_path),
-    os.path.join(os.path.dirname(__file__), 'flat_field'),
-]
+STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
+    'defringe': ('stage2', 'stage2'),
+    'flat': ('', 'stage4_flat'),
+    'despike': ('stage4_flat', 'stage5_despike'),
+}
+
+BAND_ABC_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
+
+
+# Try to get a useful default flat data path that at least works natively on Leicester's
+# ALICE HPC
+_filename = 'ch{channel}-{band}_constructed_flat{fringe}.fits'
+_path_options = (
+    os.path.join('/data/nemesis/jwst/MIRI_IFU/flat_field', _filename),
+    os.path.join(
+        os.path.dirname(__file__),
+        '..',
+        'jwst_data',
+        'MIRI_IFU',
+        'flat_field',
+        _filename,
+    ),
+    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', 'flat_field', _filename),
+    os.path.join(os.path.dirname(__file__), 'flat_field', _filename),
+)
 DEFAULT_FLAT_DATA_PATH = _path_options[-1]
 for _p in _path_options:
     if os.path.exists(os.path.dirname(_p)):
         DEFAULT_FLAT_DATA_PATH = os.path.normpath(_p)
         break
 
-# Arguments to format the paths above
-CHANNELS = ['1', '2', '3', '4']
-BANDS = ['short', 'medium', 'long']
-FRINGES = ['', '_fringe']
-CHANNEL_LENGTH_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
-
-# Pipeline constants
-Step: TypeAlias = Literal[
-    'remove_groups',
-    'reduce',
-    'navigate',
-    'desaturate',
-    'flat',
-    'despike',
-    'background',
-    'plot',
-    'animate',
-]
-STEPS: list[Step] = [
-    'remove_groups',
-    'reduce',
-    'navigate',
-    'desaturate',
-    'flat',
-    'despike',
-    'background',
-    'plot',
-    'animate',
-]
-
 
 def run_pipeline(
     root_path: str,
     *,
-    defringe: bool | Literal['both'] = 'both',
-    desaturate: bool = True,
-    groups_to_use: list[int] | None = None,
-    background_path: str | None = None,
-    ndither: int = 4,
-    parallel: float | bool = False,
-    flat_data_path: str = DEFAULT_FLAT_DATA_PATH,
-    basic_navigation: bool = False,
-    skip_steps: list[Step] | set[Step] | None = None,
+    skip_steps: Collection[Step] | None = None,
     start_step: Step | None = None,
     end_step: Step | None = None,
-    reduction_kwargs: dict[str, Any] | None = None,
-    navigation_kwargs: dict[str, Any] | None = None,
-    desaturation_kwargs: dict[str, Any] | None = None,
-    flat_kwargs: dict[str, Any] | None = None,
-    despike_kwargs: dict[str, Any] | None = None,
-    background_kwargs: dict[str, Any] | None = None,
-    plot_kwargs: dict[str, Any] | None = None,
-    animation_kwargs: dict[str, Any] | None = None,
+    parallel: float | bool = False,
+    desaturate: bool = True,
+    groups_to_use: list[int] | None = None,
+    background_subtract: bool | Literal['both'] = 'both',
+    background_path: str | None = None,
+    basic_navigation: bool = False,
+    step_kwargs: dict[Step, dict[str, Any]] | None = None,
+    parallel_kwargs: dict[str, Any] | None = None,
+    reduction_parallel_kwargs: dict[str, Any] | None = None,
+    defringe: bool | Literal['both'] = 'both',
+    flat_data_path: str = DEFAULT_FLAT_DATA_PATH,
 ) -> None:
     """
-    Run the full MIRI MRS reduction pipeline, including the standard reduction from
+    Run the full MIRI IFU reduction pipeline, including the standard reduction from
     stage0 to stage3, and custom pipeline steps for additional cleaning and data
     visualisation.
 
@@ -292,507 +300,270 @@ def run_pipeline(
 
         from miri_pipeline import run_pipeline
 
-        # Run the full pipeline, with all steps enabled
-        run_pipeline('/data/saturn/SATURN-15N')
+        # Run the full pipeline with all steps enabled
+        run_pipeline('/data/uranus/lon1')
+
+        # Run the full pipeline in parallel, using 50% of available cores
+        run_pipeline('/data/uranus/lon1', parallel=0.5)
 
         # Run the full pipeline, without any desaturation
-        run_pipeline('/data/saturn/SATURN-15N', desaturate=False)
+        run_pipeline('/data/uranus/lon1', desaturate=False)
 
-        # Run the pipeline, including background subtraction
+        # Run the pipeline, including background subtraction in stage2
         run_pipeline(
-            '/data/saturn/SATURN-15N',
-            background_path='data/saturn/SATURN-BACKGROUND',
+            '/data/uranus/lon1',
+            background_path='data/uranus/background',
         )
 
         # Run the pipeline, but stop before creating any visualisations
-        run_pipeline('/data/saturn/SATURN-15N', end_step='despike')
+        run_pipeline('/data/uranus/lon1', end_step='despike')
 
         # Re-run the pipeline, skipping the initial reduction steps
-        run_pipeline('/data/saturn/SATURN-15N', start_step='desaturate')
+        run_pipeline('/data/uranus/lon1', start_step='desaturate')
 
         # Run the pipeline, passing custom arguments to different steps
         run_pipeline(
-            '/data/saturn/SATURN-RINGS',
-            reduction_kwargs={'stages': [2, 3]},
-            animation_kwargs={'radius_factor': 2.5},
+            '/data/uranus/lon1',
+            kwargs{
+                'stage3: {
+                    'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}
+                },
+                'plot': {'plot_brightest_spectrum': True},
+                'animate': {'radius_factor': 2.5},
+            },
         )
 
     Args:
         root_path: Path to the root directory containing the data. This directory should
             contain a subdirectory with the stage 0 data (i.e. `root_path/stage0`).
             Additional directories will be created automatically for each step of the
-            pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.).
-        defringe: Toggle defringing of the data. If True, defringe data will be saved
-            and processed. If `'both'` (the default), the pipeline will be run twice,
-            first without defringing, then again with defringing enabled. Defringed data
-            will be saved in separate directories (e.g. `root_path/stage3/d1_fringe`),
-            so both sets of data will be available for further analysis.
-        desaturate: Toggle desaturation of the data. If True, the `reduction` step will
-            be run for different numbers of groups, which are then combined in the
-            `desaturate` step to produce a desaturated data cube. If False, the
-            `reduction` step will be run only once, with the full number of groups, and
-            the `desaturate` step will be skipped (i.e. going straight to the flat field
-            step).
-        groups_to_use: List of groups to reduce and use for desaturating the data. If
-            this is `None` (the default), then all available groups will be used. If
-            `desaturate` is False, then this argument will be ignored. The data with all
-            groups will always be included.
-        background_path: Path to directory containing background data. For example, if
-            your `root_path` is `/data/saturn/SATURN-15N`, the `background_path` may
-            be `/data/saturn/SATURN-BACKGROUND`. Note that background subtraction will
-            require the background data to be already reduced. If no `background_path`
-            is specified (the default), then no background subtraction will be
-            performed.
-        ndither: Number of dithers for each observation. Defaults to 4.
-        parallel: Fraction of CPU cores to use when multiprocessing. Set to 0 to run
-            serially, 1 to use all cores, 0.5 to use half of the cores, etc. If enabled,
-            multiprocessing is used in the `reduction`, `despike`, `plot` and `animate`
-            steps.
-        flat_data_path: Optionally specify custom path to the flat field data. This path
-            should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
-            be replaced by appropriate values for each channel, band and defringe
-            setting.
-        basic_navigation: Toggle between basic or full navigation. If True, then only
-            RA and Dec navigation backplanes are generated (e.g. useful for small
-            bodies). If False (the default), then full navigation is performed,
-            generating a full set of coordinate backplanes (lon/lat, illumination
-            angles etc.). Using basic navigation automatically skips the animation step.
-        skip_steps: List of steps to skip. Defaults to None. See `STEPS` above for a
-            list of valid steps. This is mainly useful if you are re-running part of the
-            pipeline.
+            pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.). This is the only
+            required argument.
+
+        skip_steps: List of steps to skip.
         start_step: Convenience argument to add all steps before `start_step` to
             `skip_steps`.
         end_step: Convenience argument to add all steps after `end_step` to
             `skip_steps`.
 
-        reduction_kwargs, navigation_kwargs, desaturation_kwargs, flat_kwargs,
-        despike_kwargs, spx_kwargs, plot_kwargs, animation_kwargs: Arguments are passed
-            to the corresponding functions for each step of the pipeline. These can
-            therefore be used to override the default values for each step. See the
-            documentation for each function for details on the arguments.
+        parallel: Fraction of CPU cores to use when multiprocessing. Set to 0 to run
+            serially, 1 to use all cores, 0.5 to use half of the cores, etc.
+        desaturate: Toggle desaturation of the data. If True, the `stage1`-`navigate`
+            steps will be run for different numbers of groups, which are then combined
+            in the`desaturate` step to produce a desaturated data cube.
+        groups_to_use: List of groups to reduce and use for desaturating the data. If
+            this is `None` (the default), then all available groups will be used. If
+            `desaturate` is False, then this argument will be ignored. The data with all
+            groups will always be included.
+        background_subtract: Toggle background subtraction. If True, the backgrounds
+            in the `background_path` directory will be subtracted from the data in
+            `stage2`. If 'both' (the default), then versions with and without background
+            subtraction will be created.
+        background_path: Path to the directory containing the background data (i.e. the
+            equivalent of `root_path` for the background observations). Note that the
+            background data must be reduced to at least `stage1` for this to work as
+            the *_rate.fits files are used for the background subtraction.
+        basic_navigation: Toggle between basic or full navigation. If True, then only
+            RA and Dec navigation backplanes are generated (e.g. useful for small
+            bodies). If False (the default), then full navigation is performed,
+            generating a full set of coordinate backplanes (lon/lat, illumination
+            angles etc.). Using basic navigation automatically skips the animation step.
+            This is mainly useful if you get SPICE errors when navigating the data.
+        step_kwargs: Dictionary of keyword arguments to pass to each step of the
+            pipeline. The keys should be the step names (e.g. `stage1`, `stage2` etc.)
+            and the values should be dictionaries of keyword arguments to pass to the
+            step. See the documentation for each step for the available keyword
+            arguments. For example,
+            `step_kwargs={'stage3':{'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}}}`
+            can will customise the `stage3` step. See the DEFAULT_KWARGS constant above
+            for the default values.
+        parallel_kwargs: Dictionary of keyword arguments to customise parallel
+            processing.
+        reduction_parallel_kwargs: Dictionary of keyword arguments to customise parallel
+            processing for the reduction steps (i.e. `stage1`-`stage3`). This will be
+            merged with `parallel_kwargs` (i.e.
+            `parallel_kwargs | reduction_parallel_kwargs`).
+
+        defringe: Toggle defringing of the data. If True, defringe data will be saved
+            and processed. If `'both'` (the default), the pipeline steps will
+            effectively be run twice, first without defringing, then again with
+            defringing enabled. Defringed data will be saved in separate directories
+            (e.g. `root_path/stage3/d1_fringe`), so both sets of data will be available
+            for further analysis.
+        flat_data_path: Optionally specify custom path to the flat field data. This path
+            should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
+            be replaced by appropriate values for each channel, band and defringe
+            setting.
     """
-    if skip_steps is None:
-        skip_steps = []
-    for s in skip_steps:
-        if s not in STEPS:
-            raise ValueError(f'Invalid skip step: {s!r} (valid steps: {STEPS})')
-    skip_steps = set(skip_steps)
-    if start_step is not None:
-        if start_step not in STEPS:
-            raise ValueError(
-                f'Invalid start step: {start_step!r} (valid steps: {STEPS})'
-            )
-        skip_steps.update(STEPS[: STEPS.index(start_step)])
-    if end_step is not None:
-        if end_step not in STEPS:
-            raise ValueError(f'Invalid end step: {end_step!r} (valid steps: {STEPS})')
-        skip_steps.update(STEPS[STEPS.index(end_step) + 1 :])
+    pipeline = MiriPipeline(
+        root_path,
+        parallel=parallel,
+        desaturate=desaturate,
+        groups_to_use=groups_to_use,
+        background_subtract=background_subtract,
+        background_path=background_path,
+        basic_navigation=basic_navigation,
+        step_kwargs=step_kwargs,
+        parallel_kwargs=parallel_kwargs,
+        reduction_parallel_kwargs=reduction_parallel_kwargs,
+        flat_data_path=flat_data_path,
+        defringe=defringe,
+    )
+    pipeline.run(
+        skip_steps=skip_steps,
+        start_step=start_step,
+        end_step=end_step,
+    )
 
-    if basic_navigation:
-        skip_steps.add('animate')
 
-    # Standardise file paths
-    root_path = os.path.expandvars(os.path.expanduser(root_path))
-    if background_path is not None:
-        background_path = os.path.expandvars(os.path.expanduser(background_path))
-    flat_data_path = os.path.expandvars(os.path.expanduser(flat_data_path))
+class MiriPipeline(Pipeline):
+    def __init__(
+        self,
+        *args,
+        flat_data_path: str,
+        defringe: bool | Literal['both'] = 'both',
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.flat_data_path = self.standardise_path(flat_data_path)
+        self.defringe = defringe
 
-    log('Running MIRI pipeline')
-    log(f'Root path: {root_path!r}', time=False)
-    if skip_steps:
-        log(
-            f'Skipping steps: {", ".join([repr(s) for s in STEPS if s in skip_steps])}',
-            time=False,
-        )
-    else:
-        log('Running all pipeline steps', time=False)
-    log(f'Defringe: {defringe!r}', time=False)
-    log(f'Desaturate: {desaturate!r}', time=False)
-    if groups_to_use:
-        log(f'Groups to keep: {groups_to_use!r}', time=False)
-    if basic_navigation:
-        log(f'Basic navigation: {basic_navigation!r}', time=False)
-    log(f'Number of dithers: {ndither!r}', time=False)
-    print()
+    @staticmethod
+    def get_instrument() -> str:
+        return 'MIRI'
 
-    if defringe == 'both':
-        kwargs = dict(
-            desaturate=desaturate,
-            groups_to_use=groups_to_use,
-            background_path=background_path,
-            ndither=ndither,
-            parallel=parallel,
-            flat_data_path=flat_data_path,
-            basic_navigation=basic_navigation,
-            navigation_kwargs=navigation_kwargs,
-            desaturation_kwargs=desaturation_kwargs,
-            flat_kwargs=flat_kwargs,
-            despike_kwargs=despike_kwargs,
-            background_kwargs=background_kwargs,
-            plot_kwargs=plot_kwargs,
-            animation_kwargs=animation_kwargs,
-        )
+    @property
+    def steps(self) -> tuple[Step, ...]:
+        return STEPS
 
-        # First, run the entire pipeline with defringe=False
-        # (do defringe=False first as it is much faster)
-        run_pipeline(
-            root_path,
-            defringe=False,
-            skip_steps=skip_steps,
-            reduction_kwargs=reduction_kwargs,
-            **kwargs,
-        )
+    @property
+    def default_kwargs(self) -> dict[Step, dict[str, Any]]:
+        return DEFAULT_KWARGS
 
-        # Then run the pipeline from the defringe step onwards with defringe=True
-        # (no need to run the remove groups and reduction stages 1&2 again)
-        skip_steps |= {'remove_groups'}
-        reduction_kwargs = reduction_kwargs or {}
-        reduction_kwargs.setdefault('stages', [2.5, 3])
-        run_pipeline(
-            root_path,
-            defringe=True,
-            skip_steps=skip_steps,
-            reduction_kwargs=reduction_kwargs,
-            **kwargs,
-        )
+    @property
+    def step_directories(self) -> dict[Step, tuple[str, str]]:
+        directories = super().step_directories | STEP_DIRECTORIES
 
-        log('MIRI pipeline completed for both defringe settings')
-        print()
-        return
+        dir_in = 'stage3_desaturated' if self.desaturate else 'stage3'
+        directories['flat'] = (dir_in, directories['flat'][1])
 
-    # Run pipeline steps...
+        return directories
 
-    if desaturate and 'remove_groups' not in skip_steps:
-        log('Removing groups from data...')
-        files = sorted(glob.glob(os.path.join(root_path, 'stage0', '*.fits')))
-        # Allow customisation of remove_groups() groups_to_use argument with kwargs
-        kw = {**dict(groups_to_use=groups_to_use), **(desaturation_kwargs or {})}
-        for _p in tqdm.tqdm(files, desc='Removing groups'):
-            remove_groups.remove_groups_from_file(_p, **kw)
-        log('Remove groups step complete\n')
+    @property
+    def stage3_file_match_hdr_keys(self) -> tuple[str, ...]:
+        return ('CHANNEL', 'BAND')
 
-    # Create list of paths to reduce (both 'main' dataset and reduced groups)
-    group_root_paths = [root_path]
-    if desaturate:
-        # If desaturating, we also need to reduce the data with fewer groups
-        # This list is sorted such that the number of groups is decreasing (so that the
-        # desaturation works correctly)
-        reduced_group_root_paths = sorted(
-            glob.glob(os.path.join(root_path, 'groups', '*_groups')),
-            reverse=True,
-            key=lambda _p: int(os.path.basename(_p).split('_')[0]),
-        )
-        if groups_to_use is not None:
-            reduced_group_root_paths = [
-                _p
-                for _p in reduced_group_root_paths
-                if int(os.path.basename(_p).split('_')[0]) in groups_to_use
-            ]
-        group_root_paths.extend(reduced_group_root_paths)
+    @property
+    def stage_directories_to_plot(self) -> tuple[str, ...]:
+        return STAGE_DIRECTORIES_TO_PLOT
 
-    if 'reduce' not in skip_steps:
-        log('Reducing data...')
-        for _p in group_root_paths:
-            # Allow customisation of reduction parallel kw with reduction_kwargs
-            kw = {**dict(parallel=parallel), **(reduction_kwargs or {})}
-            reduce_jwst_miri.JWSTReduction(
-                _p,
-                defringe=defringe,
-                _run_immediately=True,
-                **kw,
-            )
-        log('Reduction step complete\n')
+    def process_steps_list(
+        self,
+        skip_steps: Collection[Step] | None,
+        start_step: Step | None,
+        end_step: Step | None,
+    ) -> set[Step]:
+        skip_steps = super().process_skip_steps(skip_steps, start_step, end_step)
+        if not self.defringe:
+            skip_steps.add('defringe')
+        return skip_steps
 
-    if 'navigate' not in skip_steps:
-        log('Navigating data...')
-        paths_to_navigate = []
-        for _p in group_root_paths:
-            paths_to_navigate.extend(
-                get_stage_paths(_p, PATH_STAGE3_RAW, defringe, ndither)
-            )
-        paths_to_navigate = [_p for _p in paths_to_navigate if os.path.exists(_p)]
-        navigate_jwst_observations.load_kernels()
-        navigate_jwst_observations.navigate_multiple(
-            *paths_to_navigate, basic=basic_navigation, **navigation_kwargs or {}
-        )
-        log('Navigation step complete\n')
+    @property
+    def data_variants_individual(self) -> set[str]:
+        variants = super().data_variants_individual
+        if self.defringe:
+            variants.add('fringe')
+        return variants
 
-    if desaturate and 'desaturate' not in skip_steps:
-        log('Desaturating data...')
-        paths_in_list = [
-            get_stage_paths(_p, PATH_NAVIGATED, defringe, ndither)
-            for _p in group_root_paths
-        ]
-        paths_out = get_stage_paths(root_path, PATH_DESATURATED, defringe, ndither)
-        args_list = []
-        for paths_in, path_out in zip(zip(*paths_in_list), paths_out):
-            if os.path.exists(paths_in[0]):
-                args_list.append((paths_in, path_out))
+    def print_reduction_info(self, skip_steps: set[Step]) -> None:
+        super().print_reduction_info(skip_steps)
+        self.log(f'Defringe: {self.defringe!r}', time=False)
+        self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
 
-        log(f'Processing {len(args_list)} files...')
-        for paths_in, paths_out in tqdm.tqdm(args_list, desc='Desaturating'):
-            desaturate_data.replace_saturated(
-                paths_in, paths_out, **desaturation_kwargs or {}
-            )
-        log('Desaturation step complete\n')
+    # Step overrides
+    def reduction_detector1_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
+        path_in, output_dir, kwargs = args
+        kwargs = kwargs.copy()
+        with fits.open(path_in) as hdul:
+            ngroups = hdul['PRIMARY'].header['NGROUPS']  # type: ignore
+        if ngroups <= 3:
+            kwargs['steps'] = kwargs.get('steps', {}) | {
+                'firstframe': {'skip': True},
+                'lastframe': {'skip': True},
+                'rscd': {'skip': True},
+                'jump': {'skip': True},
+            }
+        return super().reduction_detector1_fn((path_in, output_dir, kwargs))
 
-    if 'flat' not in skip_steps:
-        log('Applying flat fields...')
-        pattern_in = PATH_DESATURATED if desaturate else PATH_NAVIGATED
-        log(f'Input file pattern: {pattern_in!r}', time=False)
-        log(f'Flat data path: {flat_data_path!r}', time=False)
-        paths = [
-            (p_in, p_out, p_flat)
-            for p_in, p_out, p_flat in zip(
-                get_stage_paths(root_path, pattern_in, defringe, ndither),
-                get_stage_paths(root_path, PATH_FLAT, defringe, ndither),
-                get_stage_paths(None, flat_data_path, defringe, ndither),
-            )
-            if os.path.exists(p_in)
-        ]
-
-        log(f'Processing {len(paths)} files...')
-        for p_in, p_out, p_flat in tqdm.tqdm(paths, desc='Flat fielding'):
-            flat_field.apply_flat(p_in, p_out, p_flat, **flat_kwargs or {})
-        log('Flat fielding step complete\n')
-
-    if 'despike' not in skip_steps:
-        log('Despiking data...')
-        paths = [
-            (p_in, p_out)
-            for p_in, p_out in zip(
-                get_stage_paths(root_path, PATH_FLAT, defringe, ndither),
-                get_stage_paths(root_path, PATH_DESPIKED, defringe, ndither),
-            )
-            if os.path.exists(p_in)
-        ]
-
-        log(f'Processing {len(paths)} files...')
-        if parallel:
-            despike_kwargs = despike_kwargs or {}
-            despike_kwargs['progress_bar'] = False
-        despike_args = [(p_in, p_out, despike_kwargs) for p_in, p_out in paths]
-        runmany(despike_fn, despike_args, parallel_frac=parallel, desc='Despiking')
-        log('Despiking step complete\n')
-
-    if (background_path is not None) and ('background' not in skip_steps):
-        log('Subtracting background...')
-        log(f'Background path: {background_path!r}', time=False)
-        paths = [
-            (p_in, p_out, p_bg)
-            for p_in, p_out, p_bg in zip(
-                get_stage_paths(root_path, PATH_DESPIKED, defringe, ndither),
-                get_stage_paths(root_path, PATH_BACKGROUND, defringe, ndither),
-                get_stage_paths(
-                    background_path,
-                    PATH_DESPIKED.format_map(KeepMissingDict(dither='1')),
-                    defringe,
-                    ndither,
-                ),
-            )
-            if os.path.exists(p_in) and os.path.exists(p_bg)
-        ]
-        log(f'Processing {len(paths)} files...')
-        for p_in, p_out, p_bg in tqdm.tqdm(paths, desc='Background subtracting'):
-            background_subtraction.subtract_background(
-                p_in, p_out, p_bg, **flat_kwargs or {}
-            )
-        log('Background step complete\n')
-
-    if 'plot' not in skip_steps:
-        log('Generating quick look plots...')
-        # Reverse stages so that we get plots of the 'final' version generated first
-        for stage in reversed(DATA_STAGES):
-            log(f'Generating plots for stage {stage}...')
-            template_in = PATH_DATA.format_map(KeepMissingDict(stage=stage))
-            template_out = PATH_PLOT.format_map(KeepMissingDict(stage=stage))
-            paths = []
-            for _p in group_root_paths:
-                paths.extend(
-                    [
-                        (p_in, p_out)
-                        for p_in, p_out in zip(
-                            get_stage_paths(_p, template_in, defringe, ndither),
-                            get_stage_paths(_p, template_out, defringe, ndither),
-                        )
-                        if os.path.exists(p_in)
-                    ]
-                )
-
-            log(f'Processing {len(paths)} files...')
-            plot_args = [(p_in, p_out, plot_kwargs) for p_in, p_out in paths]
+    def run_defringe(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['defringe']
+        for root_path in self.iterate_group_root_paths():
+            paths_in = self.get_paths(root_path, dir_in, '*cal.fits')
+            if 'bg' in self.data_variants_individual:
+                paths_in += self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
+            args_list = [(p, os.path.dirname(p), kwargs) for p in paths_in]
             runmany(
-                plot_fn, plot_args, parallel_frac=parallel, desc=f'Plotting {stage}'
+                self.defringe_fn,
+                args_list,
+                desc='defringe',
+                **self.reduction_parallel_kwargs,
             )
 
-        log('Plotting step complete\n')
-
-    if 'animate' not in skip_steps:
-        log('Generating animations...')
-        # Use dict for paths here as multiple input paths map to the same output
-        paths_dict: dict[str, list[str]] = {}
-        for stage in reversed(DATA_STAGES):
-            template_in = PATH_DATA.format_map(KeepMissingDict(stage=stage))
-            template_out = PATH_ANIMATION.format_map(KeepMissingDict(stage=stage))
-            for p_in, p_out in zip(
-                get_stage_paths(root_path, template_in, defringe, ndither),
-                get_stage_paths(root_path, template_out, defringe, ndither),
-            ):
-                if os.path.exists(p_in):
-                    paths_dict.setdefault(p_out, []).append(p_in)
-
-        log(f'{len(paths_dict)} animations to process...')
-        animation_kwargs = animation_kwargs or {}
-        animation_kwargs.setdefault('print_output', False)
-        if parallel:
-            animation_kwargs.setdefault('progress_bar', False)
-        animation_args = [
-            (p_out, p_ins, animation_kwargs) for p_out, p_ins in paths_dict.items()
-        ]
-        runmany(
-            animation_fn,
-            animation_args,
-            parallel_frac=parallel,
-            desc='Animating',
+    def defringe_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
+        path_in, output_dir, kwargs = args
+        ResidualFringeStep.call(
+            path_in, output_dir=output_dir, save_results=True, skip=False, **kwargs
         )
-        log('Animation step complete\n')
 
-    log('MIRI pipeline complete')
-    log(f'Root path: {root_path!r}', time=False)
-    log(f'Defringe: {defringe!r}', time=False)
-    log(f'Desaturate: {desaturate!r}', time=False)
-    if skip_steps:
-        log(
-            f'Skipped steps: {", ".join([repr(s) for s in STEPS if s in skip_steps])}',
-            time=False,
-        )
-    print()
+    def get_stage3_variant_paths_in(self, variant: frozenset[str]) -> list[str]:
+        """
+        Get list of input paths for a given variant for stage3.
+        """
+        dir_in, dir_out = self.step_directories['stage3']
+        if variant == frozenset():
+            return self.get_paths(dir_in, '*cal.fits')
+        elif variant == frozenset({'bg'}):
+            return self.get_paths(dir_in, 'bg', '*cal.fits')
+        elif variant == frozenset({'bg', 'fringe'}):
+            return self.get_paths(dir_in, 'bg', '*residual_fringe.fits')
+        elif variant == frozenset({'fringe'}):
+            return self.get_paths(dir_in, '*residual_fringe.fits')
+        raise ValueError(f'Unknown variant: {variant}')
 
+    def run_flat(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['flat']
+        self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
+        # Use d* to skip dither combined files
+        paths_in = self.get_paths(dir_in, 'd*', '*_nav.fits', filter_variants=True)
+        self.log(f'Processing {len(paths_in)} files...', time=False)
+        for p_in in tqdm.tqdm(paths_in, desc='flat'):
+            p_out = self.replace_path_part(p_in, -3, dir_out, old=dir_in)
+            with fits.open(p_in) as hdul:
+                hdr = hdul['PRIMARY'].header  #  type: ignore
+            p_flat = self.flat_data_path.format(
+                channel=hdr['CHANNEL'],
+                band=hdr['BAND'].lower(),
+                fringe='_fringe' if hdr['S_RESFRI'] == 'COMPLETE' else '',
+            )
+            flat_field.apply_flat(p_in, p_out, p_flat, **kwargs)
 
-def despike_fn(args: tuple[str, str, dict[str, Any] | None]):
-    p_in, p_out, despike_kwargs = args
-    despike_data.despike_cube(p_in, p_out, **despike_kwargs or {})
-
-
-def plot_fn(args: tuple[str, str, dict[str, Any] | None]):
-    p_in, p_out, plot_kwargs = args
-    jwst_summary_plots.make_summary_plot(p_in, p_out, **plot_kwargs or {})
-
-
-def animation_fn(args: tuple[str, list[str], dict[str, Any] | None]):
-    p_out, p_ins, animation_kwargs = args
-    jwst_summary_animation.make_animation(p_ins, p_out, **animation_kwargs or {})
-
-
-def get_stage_paths(
-    root_path: str | None,
-    template: str,
-    defringe: bool,
-    ndither: int,
-) -> list[str]:
-    """
-    Get a list of paths for all combinations of dithers, channels and bands for a given
-    stage of the reduction.
-
-    Args:
-        root_path: Directory containing the data.
-        template: Path of the data files relative to the `root_path`. The values
-            `{dither}`, `{channel}`, `{band}`, `{abc}` and `{fringe}` will be replaced
-            with the corresponding values for each individual file.
-        defringe: Toggle defringing.
-        ndither: Number of dithers.
-
-    Returns:
-        List of file paths, constructed from the root path and the template.
-    """
-    if root_path:
-        template = os.path.join(root_path, template)
-    fringe = '_fringe' if defringe else ''
-    dithers = [str(i + 1) for i in range(ndither)]
-
-    paths = []
-    for path_kw in all_combinations(
-        dither=dithers,
-        channel=CHANNELS,
-        band=BANDS,
-    ):
-        path_kw['abc'] = CHANNEL_LENGTH_ALIASES[path_kw['band']]
-        paths.append(template.format(fringe=fringe, **path_kw))
-    return paths
+    def get_plot_filename_prefix(self, path: str) -> str:
+        with fits.open(path) as hdul:
+            hdr = hdul['PRIMARY'].header  #  type: ignore
+        channel = hdr['CHANNEL']
+        abc = BAND_ABC_ALIASES[hdr['BAND'].casefold().strip()]
+        return f'{channel}{abc}_'
 
 
 def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description=(
-            'Full JWST MIRI pipeline including the standard reduction from stage0 to '
-            'stage3, and custom pipeline steps for additional cleaning and data '
-            'visualisation. For more customisation, this script can be imported and '
-            'run in Python (see the source code for mode details).\n\n'
-            'The following steps are run in the full pipeline:' + STEP_DESCRIPTIONS
-        ),
-        epilog=CLI_EXAMPLES,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        argument_default=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        'root_path',
-        type=str,
-        help="""Path to the directory containing the data. This directory should
-            contain a subdirectory with the stage0 data (i.e. `root_path/stage0`).
-            Additional directories will be created automatically for each step of the
-            pipeline (e.g. `root_path/stage1`, `root_path/plots` etc.).""",
-    )
+    parser = get_pipeline_argument_parser(MiriPipeline, STEP_DESCRIPTIONS, CLI_EXAMPLES)
     parser.add_argument(
         '--defringe',
         action=argparse.BooleanOptionalAction,
         default='both',
-        help="""Toggle defringing of the data. If unspecified, the pipeline will be run 
-            twice, first without defringing, then again with defringing enabled.""",
-    )
-    parser.add_argument(
-        '--desaturate',
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="""Toggle desaturation of the data. If desaturation is enabled the 
-            `reduction` step will be run for different numbers of groups, which are then
-            combined in the `desaturate` step to produce a desaturated data cube. This
-            desaturation is enabled by default.
-            """,
-    )
-    parser.add_argument(
-        '--groups_to_use',
-        type=str,
-        help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will
-            keep the first four groups. If unspecified, all groups will be kept.""",
-    )
-    parser.add_argument(
-        '--background_path',
-        type=str,
-        help="""Path to directory containing background data. For example, if
-            your `root_path` is `/data/saturn/SATURN-15N`, the `background_path` may
-            be `/data/saturn/SATURN-BACKGROUND`. Note that background subtraction will
-            require the background data to be already reduced. If no `background_path`
-            is specified (the default), then no background subtraction will be 
-            performed.""",
-    )
-    parser.add_argument(
-        '--ndither',
-        type=int,
-        default=4,
-        help="""Number of dithers in the dataset. Defaults to 4.""",
-    )
-    parser.add_argument(
-        '--parallel',
-        nargs='?',
-        const=1,
-        type=float,
-        help="""Fraction of CPU cores to use when multiprocessing. For example, set 
-        0.5 to use half of the available cores. If unspecified, then multiprocessing 
-        will not be used and the pipeline will be run serially. If specified but no 
-        value is given, then all available cores will be used (i.e. `--parallel` is 
-        equivalent to `--parallel 1`). If enabled, multiprocessing is used in the 
-        `reduction`, `despike`, `plot` and `animate` steps.""",
+        help="""Toggle defringing of the data. If unspecified, the pipeline steps will
+            effectively be run twice, first without defringing, then again with
+            defringing enabled.""",
     )
     parser.add_argument(
         '--flat_data_path',
@@ -802,54 +573,7 @@ def main():
             be replaced by appropriate values for each channel, band and defringe
             setting.""",
     )
-    parser.add_argument(
-        '--basic_navigation',
-        action='store_true',
-        help="""Use basic navigation, and only save RA and Dec backplanes (e.g. useful
-            for small bodies). By default, full navigation is performed, generating a
-            full set of coordinate backplanes (lon/lat, illumination angles etc.). Using
-            basic navigation automatically skips the navigation step.""",
-    )
-    parser.add_argument(
-        '--skip_steps',
-        nargs='+',
-        type=str,
-        help="""List of steps to skip. This is generally only useful if you are
-            re-running part of the pipeline. Multiple steps can be passed as a
-            space-separated list. For example, `--skip_steps flat despike`.""",
-    )
-    parser.add_argument(
-        '--start_step',
-        type=str,
-        help="""Convenience argument to add all steps before `start_step` to 
-            `skip_steps`.""",
-    )
-    parser.add_argument(
-        '--end_step',
-        type=str,
-        help="""Convenience argument to add all steps steps after `end_step` to 
-            `skip_steps`.""",
-    )
-    parser.add_argument(
-        '--kwargs',
-        type=str,
-        help="""JSON string containing keyword arguments to pass to individual pipeline
-            steps. For example, 
-            `--kwargs '{"reduction": {"stages": [2, 3]}, "animation": {"radius_factor": 2.5}}'` 
-            will pass the custom arguments to the reduction and animation steps.
-            """,
-    )
-    args = vars(parser.parse_args())
-    json_kwargs = args.pop('kwargs', None)
-    if json_kwargs:
-        json_kwargs = json.loads(json_kwargs)
-        for k, v in json_kwargs.items():
-            if not k.endswith('_kwargs'):
-                k = k + '_kwargs'
-            args[k] = v
-    if 'groups_to_use' in args:
-        args['groups_to_use'] = [int(g) for g in args['groups_to_use'].split(',')]
-    run_pipeline(**args)
+    run_pipeline(**vars(parser.parse_args()))
 
 
 if __name__ == '__main__':

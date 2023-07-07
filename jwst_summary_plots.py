@@ -77,6 +77,8 @@ DATA_CMAP = 'plasma'
 SATURATION_CMAP = 'YlOrRd'
 SATURATION_COLOR = 'r'
 
+# TODO make sp_max auto by default?
+
 
 def main(p_in, p_out):
     make_summary_plot(p_in, p_out)
@@ -111,6 +113,8 @@ def make_summary_plot(
             `'.png'` in the input path. If the output directory does not exist, it will
             automatically be created.
         show: Toggle to optionally show the plot instead of saving it.
+        plot_brightness_spectrum: Toggle to optionally plot the spectrum of the brightest
+            10% of spaxels in the cube in addition to the average spectrum.
     """
     fig = plt.figure(figsize=(10, 10), dpi=200)
 
@@ -121,6 +125,7 @@ def make_summary_plot(
     data_row = 4
     sat_row = 5
 
+    reduction_notes = []
     with fits.open(path_in) as hdul:
         data = hdul['SCI'].data  # type: ignore
         primary_header = hdul['PRIMARY'].header  # type: ignore
@@ -132,7 +137,12 @@ def make_summary_plot(
             lon_img = np.full_like(ra_img, np.nan)
         else:
             lon_img = hdul['LON'].data  # type: ignore
-        reduction_notes = get_header_reduction_notes(hdul)
+
+        if primary_header.get('S_BKDSUB') == 'COMPLETE':
+            reduction_notes.append('Background subtracted')
+        if primary_header.get('S_RESFRI') == 'COMPLETE':
+            reduction_notes.append('Residual fringe corrected')
+        reduction_notes.extend(get_header_reduction_notes(hdul))
     instrument = primary_header['INSTRUME']
 
     wl = get_wavelengths(data_header)
@@ -255,25 +265,33 @@ def make_summary_plot(
         vmax=np.nanpercentile(img, vmax_percentile),
     )
 
+    if 'dither-combined' in primary_header['ASNTABLE']:
+        # Dither combinations still have PATT_NUM = 1, so use asn filename as flag
+        dither = 'combined'
+    else:
+        dither = primary_header['PATT_NUM']
+
     title_parts = [
         primary_header['TARGPROP'],
-        'Dither {}'.format(primary_header['PATT_NUM']),
+        f'Dither {dither}',
         primary_header['INSTRUME'],
     ]
     if instrument == 'MIRI':
         title_parts.append(
             'Channel {} {}'.format(primary_header['CHANNEL'], primary_header['BAND'])
         )
-        if primary_header['S_RESFRI'] == 'COMPLETE':
-            title_parts.append('Residual fringe corrected')
+        # if primary_header['S_RESFRI'] == 'COMPLETE':
+        #     title_parts.append('Residual fringe corrected')
     if instrument == 'NIRSPEC':
         title_parts.append(
-            '{} {} {}'.format(
-                primary_header['DETECTOR'],
+            '{} {}'.format(
                 primary_header['FILTER'],
                 primary_header['GRATING'],
             )
         )
+        detector = primary_header['DETECTOR']
+        if detector != 'MULTIPLE':
+            title_parts[-1] = str(detector) + ' ' + title_parts[-1]
     ax.set_title('  |  '.join(title_parts))
 
     ax = ax_sp
@@ -282,7 +300,7 @@ def make_summary_plot(
     sp_max = sp_fn(data[:, data_to_use], axis=1)
 
     if plot_brightest_spectrum:
-        ax.plot(wl, sp_max, color='tab:blue', linewidth=1)
+        ax.plot(wl, sp_max, color='tab:blue', alpha=0.667, linewidth=1)
     ax.plot(wl, sp, color='k', linewidth=1)
     if plot_brightest_spectrum:
         for s, c in [
@@ -310,7 +328,7 @@ def make_summary_plot(
         ax.set_ylabel(ax.get_ylabel() + ' (linear scale)')
     else:
         ax.set_yscale('log')
-    if instrument == 'NIRSPEC':
+    if instrument == 'NIRSPEC' or ax.get_ylim()[0] < 0.5:
         ylim = ax.get_ylim()
         ymin = max(
             ylim[0], min(max(np.nanpercentile(sp, 5) / 10, 5e-2), np.nanmin(sp_max))
