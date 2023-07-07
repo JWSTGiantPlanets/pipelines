@@ -72,8 +72,8 @@ class NavigatorBase:
         self.decs = np.reshape(coords[1], (sz[1], sz[0]))
 
         # Apply any shift in RA and DEC in arcseconds
-        self.ras += self.radec_offset[0] / 3600.0
-        self.decs += self.radec_offset[1] / 3600.0
+        self.ras -= self.radec_offset[0] / 3600.0
+        self.decs -= self.radec_offset[1] / 3600.0
 
         # Make our output array with extra room for RA and Dec
         output = np.zeros([len(self.keys) + 2, sz[1], sz[0]])
