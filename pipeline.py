@@ -155,11 +155,12 @@ class Pipeline:
 
         parallel_kwargs = dict(
             parallel_frac=parallel,
-            timeout=60 * 60,
+            timeout=2 * 60 * 60,  # avgerage of 2 hours/job
         ) | (parallel_kwargs or {})
         reduction_parallel_kwargs = (
             parallel_kwargs
             | dict(
+                timeout=5 * 60 * 60,  # average of 5 hours/job
                 start_delay=10,
                 parallel_job_kw=dict(
                     caught_error_wait_time=15,
