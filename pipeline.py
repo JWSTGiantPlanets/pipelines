@@ -577,7 +577,7 @@ class Pipeline:
             self.log(f'Background path: {self.background_path!r}', time=False)
             background_path_dict = self.get_background_path_dict()
             self.log(
-                f'Found {len(background_path_dict)} background files to consider',
+                f'Found {len(background_path_dict)} background file groups to consider',
             )
         else:
             background_path_dict = {}
