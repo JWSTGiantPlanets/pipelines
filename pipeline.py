@@ -438,7 +438,9 @@ class Pipeline:
         return group_root_paths
 
     def iterate_group_root_paths(self) -> Generator[str, Any, None]:
-        """Iterate over the group root paths, yielding each path."""
+        """
+        Iterate over the group root paths, yielding each path and printing a message.
+        """
         group_root_paths = self.group_root_paths
         for idx, root_path in enumerate(group_root_paths):
             if len(group_root_paths) > 1:
@@ -797,7 +799,7 @@ class Pipeline:
 
         # Group paths by their relative path to the group root path
         paths_dict: dict[str, list[str]] = {}
-        for group_root_path in self.iterate_group_root_paths():
+        for group_root_path in self.group_root_paths:
             paths_in = self.get_paths(
                 group_root_path, dir_in, '*', '*_nav.fits', filter_variants=True
             )
