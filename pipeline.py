@@ -26,11 +26,9 @@ from astropy.io import fits
 from jwst.associations.asn_from_list import asn_from_list
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
-from jwst.residual_fringe import ResidualFringeStep
 
 import desaturate_data
 import despike_data
-import flat_field
 import jwst_summary_animation
 import jwst_summary_plots
 import navigate_jwst_observations
