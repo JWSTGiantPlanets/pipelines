@@ -9,7 +9,17 @@ import glob
 import json
 import os
 import pathlib
-from typing import Any, Collection, Generator, Literal, Type, TypeAlias, cast, overload
+from typing import (
+    Any,
+    Collection,
+    Generator,
+    Literal,
+    NewType,
+    Type,
+    TypeAlias,
+    cast,
+    overload,
+)
 
 import tqdm
 from astropy.io import fits
@@ -41,6 +51,7 @@ Step: TypeAlias = Literal[
     'flat',  # MIRI only
     'defringe',  # MIRI only
 ]
+RootPath = NewType('RootPath', str)
 
 MIRI_STEPS = (
     'remove_groups',
@@ -173,7 +184,7 @@ class Pipeline:
         self.parallel_kwargs = parallel_kwargs
         self.reduction_parallel_kwargs = reduction_parallel_kwargs
         self.step_kwargs = step_kwargs or {}
-        self.root_path = self.standardise_path(root_path)
+        self.root_path = RootPath(self.standardise_path(root_path))
         self.desaturate = desaturate
         self.groups_to_use = groups_to_use
         self.background_subtract = background_subtract
@@ -401,15 +412,17 @@ class Pipeline:
         return str(p.with_suffix(new))
 
     # path getting/filtering...
-    def get_paths(self, *path_parts: str, filter_variants: bool = False) -> list[str]:
+    def get_paths(
+        self, root: RootPath, *path_parts: str, filter_variants: bool = False
+    ) -> list[str]:
         """Get a list of paths matching the given path parts."""
-        paths = sorted(glob.glob(os.path.join(self.root_path, *path_parts)))
+        paths = sorted(glob.glob(os.path.join(root, *path_parts)))
         if filter_variants:
             paths = self.filter_paths_for_data_variants(paths)
         return paths
 
     @property
-    def group_root_paths(self) -> list[str]:
+    def group_root_paths(self) -> list[RootPath]:
         """
         List of relative root paths for different numbers of reduced groups, in
         descending order.
@@ -418,11 +431,11 @@ class Pipeline:
         `[root_path, root_path+'/groups/4_groups', root_path+'/groups/3_groups', ...]`.
         If desaturation is disabled, then the returned list will be `[root_path]`.
         """
-        group_root_paths = [self.root_path]
+        group_root_paths: list[str] = [self.root_path]
         if self.desaturate:
             # If desaturating, we also need to reduce the data with fewer groups
-            # This list is sorted such that the number of groups is decreasing (so that the
-            # desaturation works correctly)
+            # This list is sorted such that the number of groups is decreasing (so that
+            # the desaturation works correctly)
             reduced_group_root_paths = sorted(
                 glob.glob(os.path.join(self.root_path, 'groups', '*_groups')),
                 reverse=True,
@@ -435,9 +448,9 @@ class Pipeline:
                     if int(os.path.basename(_p).split('_')[0]) in self.groups_to_use
                 ]
             group_root_paths.extend(reduced_group_root_paths)
-        return group_root_paths
+        return group_root_paths  # type: ignore
 
-    def iterate_group_root_paths(self) -> Generator[str, Any, None]:
+    def iterate_group_root_paths(self) -> Generator[RootPath, Any, None]:
         """
         Iterate over the group root paths, yielding each path and printing a message.
         """
@@ -526,7 +539,7 @@ class Pipeline:
     # pylint: disable-next=unused-argument
     def run_remove_groups(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['remove_groups']
-        paths_in = self.get_paths(dir_in, '*_uncal.fits')
+        paths_in = self.get_paths(self.root_path, dir_in, '*_uncal.fits')
         self.log(f'Processing {len(paths_in)} files...', time=False)
         for p in tqdm.tqdm(paths_in, desc='remove_groups'):
             remove_groups.remove_groups_from_file(p, self.groups_to_use)
@@ -535,7 +548,7 @@ class Pipeline:
     def run_stage1(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['stage1']
         for root_path in self.iterate_group_root_paths():
-            paths_in = self.get_paths(dir_in, '*uncal.fits')
+            paths_in = self.get_paths(root_path, dir_in, '*uncal.fits')
             output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             check_path(output_dir)
@@ -585,7 +598,7 @@ class Pipeline:
             background_path_dict = {}
 
         for root_path in self.iterate_group_root_paths():
-            paths_in = self.get_paths(dir_in, '*rate.fits')
+            paths_in = self.get_paths(root_path, dir_in, '*rate.fits')
             args_list: list[tuple[str, str, dict[str, Any]]] = []
             for background in background_options:
                 output_dir = os.path.join(root_path, dir_out)
@@ -677,7 +690,7 @@ class Pipeline:
                 variant_dirname = '_'.join(sorted(variant))
                 if len(variant) > 0:
                     variant_dirname = f'_{variant_dirname}'
-                paths_in = self.get_stage3_variant_paths_in(variant)
+                paths_in = self.get_stage3_variant_paths_in(root_path, variant)
                 grouped_files = self.group_stage2_files_for_stage3(paths_in)
 
                 # Only need to include the tile in prodname if it is needed to avoid
@@ -700,7 +713,8 @@ class Pipeline:
 
                     match_key_str = '_'.join(str(k) for k in match_key)
                     asn_path = os.path.join(
-                        output_dir,
+                        root_path,
+                        dir_in,
                         f'{match_key_str}_dither-{dirname}_{tile}_asn.json',
                     )
                     prodname = 'Level3' + (
@@ -728,15 +742,17 @@ class Pipeline:
             **kwargs,
         )
 
-    def get_stage3_variant_paths_in(self, variant: frozenset[str]) -> list[str]:
+    def get_stage3_variant_paths_in(
+        self, root_path: RootPath, variant: frozenset[str]
+    ) -> list[str]:
         """
         Get list of input paths for a given variant for stage3.
         """
         dir_in, dir_out = self.step_directories['stage3']
         if variant == frozenset():
-            return self.get_paths(dir_in, '*cal.fits')
+            return self.get_paths(root_path, dir_in, '*cal.fits')
         elif variant == frozenset({'bg'}):
-            return self.get_paths(dir_in, 'bg', '*cal.fits')
+            return self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
         raise ValueError(f'Unknown variant: {variant}')
 
     def group_stage2_files_for_stage3(
@@ -882,7 +898,7 @@ class Pipeline:
         for stage_dir in self.stage_directories_to_plot:
             # use d* as dither path as we don't want to use combined dithers here
             paths_in = self.get_paths(
-                stage_dir, 'd*', '*_nav.fits', filter_variants=True
+                self.root_path, stage_dir, 'd*', '*_nav.fits', filter_variants=True
             )
             for p_in in paths_in:
                 variant_dir = pathlib.Path(p_in).parts[-2].split('_')[1:]
