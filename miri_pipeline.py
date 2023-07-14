@@ -203,7 +203,7 @@ from jwst.residual_fringe import ResidualFringeStep
 
 import flat_field
 from parallel_tools import runmany
-from pipeline import Pipeline, Step, get_pipeline_argument_parser
+from pipeline import Pipeline, RootPath, Step, get_pipeline_argument_parser
 
 # Pipeline constants for MIRI
 STEPS = (
@@ -443,10 +443,10 @@ class MiriPipeline(Pipeline):
     @property
     def step_directories(self) -> dict[Step, tuple[str, str]]:
         directories = super().step_directories | STEP_DIRECTORIES
-
-        dir_in = 'stage3_desaturated' if self.desaturate else 'stage3'
-        directories['flat'] = (dir_in, directories['flat'][1])
-
+        directories['flat'] = (
+            'stage3_desaturated' if self.desaturate else 'stage3',
+            directories['flat'][1],
+        )
         return directories
 
     @property
@@ -515,26 +515,30 @@ class MiriPipeline(Pipeline):
             path_in, output_dir=output_dir, save_results=True, skip=False, **kwargs
         )
 
-    def get_stage3_variant_paths_in(self, variant: frozenset[str]) -> list[str]:
+    def get_stage3_variant_paths_in(
+        self, root_path: RootPath, variant: frozenset[str]
+    ) -> list[str]:
         """
         Get list of input paths for a given variant for stage3.
         """
         dir_in, dir_out = self.step_directories['stage3']
         if variant == frozenset():
-            return self.get_paths(dir_in, '*cal.fits')
+            return self.get_paths(root_path, dir_in, '*cal.fits')
         elif variant == frozenset({'bg'}):
-            return self.get_paths(dir_in, 'bg', '*cal.fits')
+            return self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
         elif variant == frozenset({'bg', 'fringe'}):
-            return self.get_paths(dir_in, 'bg', '*residual_fringe.fits')
+            return self.get_paths(root_path, dir_in, 'bg', '*residual_fringe.fits')
         elif variant == frozenset({'fringe'}):
-            return self.get_paths(dir_in, '*residual_fringe.fits')
+            return self.get_paths(root_path, dir_in, '*residual_fringe.fits')
         raise ValueError(f'Unknown variant: {variant}')
 
     def run_flat(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['flat']
         self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
         # Use d* to skip dither combined files
-        paths_in = self.get_paths(dir_in, 'd*', '*_nav.fits', filter_variants=True)
+        paths_in = self.get_paths(
+            self.root_path, dir_in, 'd*', '*_nav.fits', filter_variants=True
+        )
         self.log(f'Processing {len(paths_in)} files...', time=False)
         for p_in in tqdm.tqdm(paths_in, desc='flat'):
             p_out = self.replace_path_part(p_in, -3, dir_out, old=dir_in)
