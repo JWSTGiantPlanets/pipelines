@@ -189,6 +189,10 @@ class Pipeline:
         self.background_path = self.standardise_path(background_path)
         self.basic_navigation = basic_navigation
 
+        for k in self.step_kwargs.keys():
+            if k not in self.steps:
+                raise ValueError(f'step_kwargs contains invalid step name {k!r}')
+
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.root_path!r})'
 
