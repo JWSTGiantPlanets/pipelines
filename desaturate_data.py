@@ -41,11 +41,15 @@ def replace_saturated(
     maximum_step_total: int = MAXIMUM_STEP_TOTAL,
     partial_saturation_factor: float = PARTIAL_SATURATION_FACTOR,
     partial_saturation_snr: float = PARTIAL_SATURATION_SNR,
+    partial_saturation_min_flux: float = 0,
     outlier_factor: float = OUTLIER_FACTOR,
     outlier_threshold_low_snr1: float = OUTLIER_THRESHOLD_LOW_SNR1,
     outlier_factor_low_snr1: float = OUTLIER_FACTOR_LOW_SNR1,
     outlier_threshold_low_snr2: float = OUTLIER_THRESHOLD_LOW_SNR2,
     outlier_factor_low_snr2: float = OUTLIER_FACTOR_LOW_SNR2,
+    outlier_min_flux: float = 0,
+    do_partial_saturation: bool = True,
+    do_outlier_check: bool = True,
 ) -> None:
     """
     Create desaturated data cube using data with reduced groups.
@@ -102,23 +106,29 @@ def replace_saturated(
 
         shape = cube_arrays[sci_key][0].shape
         indices_cube = np.full(shape, np.nan)
+        flag_cube = np.full(shape, 0)
         for idx1 in range(shape[1]):
             for idx2 in range(shape[2]):
                 spectra = [c[:, idx1, idx2] for c in cube_arrays[sci_key]]
                 errors = [c[:, idx1, idx2] for c in cube_arrays[err_key]]
-                sp, indices = replace_saturated_spectra(
+                sp, indices, flags = replace_saturated_spectra(
                     spectra,
                     errors,
                     expand_window_spectral=expand_window_spectral,
                     partial_saturation_factor=partial_saturation_factor,
                     partial_saturation_snr=partial_saturation_snr,
+                    partial_saturation_min_flux=partial_saturation_min_flux,
                     outlier_factor=outlier_factor,
                     outlier_factor_low_snr1=outlier_factor_low_snr1,
                     outlier_threshold_low_snr1=outlier_threshold_low_snr1,
                     outlier_factor_low_snr2=outlier_factor_low_snr2,
                     outlier_threshold_low_snr2=outlier_threshold_low_snr2,
+                    outlier_min_flux=outlier_min_flux,
+                    do_partial_saturation=do_partial_saturation,
+                    do_outlier_check=do_outlier_check,
                 )
                 indices_cube[:, idx1, idx2] = indices
+                flag_cube[:, idx1, idx2] = flags
         if maximum_step is None:
             maximum_step = math.ceil(len(ngroups) / maximum_step_total)
         indices_cube = expand_spatial_windows(indices_cube, maximum_step=maximum_step)
@@ -140,7 +150,26 @@ def replace_saturated(
 
         header = fits.Header()
         header.add_comment('Number of groups used when desaturating')
-        hdu = fits.ImageHDU(data=ngroups_cube, header=header, name='NGROUPS')
+        hdu = fits.ImageHDU(
+            data=np.nan_to_num(ngroups_cube).astype(np.uint8),
+            header=header,
+            name='NGROUPS',
+        )
+        hdul.append(hdu)
+
+        header = fits.Header()
+        header.add_comment('Type of bad data identified when desaturating')
+        header.add_comment('0: Good data')
+        header.add_comment(
+            '1: Bad data identified by standard pipeline (e.g. saturated)'
+        )
+        header.add_comment('2: Partially saturated')
+        header.add_comment('3: Outlier (e.g. cosmic ray)')
+        hdu = fits.ImageHDU(
+            data=flag_cube.astype(np.uint8),
+            header=header,
+            name='DESAT_TYPE',
+        )
         hdul.append(hdu)
 
         tools.add_header_reduction_note(hdul, 'Desaturated')
@@ -166,6 +195,10 @@ def replace_saturated(
             partial_saturation_snr,
             'Partial saturation min. SNR',
         )
+        header['HIERARCH DESAT PARTIAL_SAT_MIN_FLUX'] = (
+            partial_saturation_min_flux,
+            'Partial saturation min. flux',
+        )
         header['HIERARCH DESAT OUTLIER_FACTOR'] = (outlier_factor,)
         header['HIERARCH DESAT OUTLIER_FACTOR_LOW_SNR1'] = (outlier_factor_low_snr1,)
         header['HIERARCH DESAT OUTLIER_FACTOR_LOW_SNR2'] = (outlier_factor_low_snr2,)
@@ -175,6 +208,7 @@ def replace_saturated(
         header['HIERARCH DESAT OUTLIER_THRESHOLD_LOW_SNR2'] = (
             outlier_threshold_low_snr2,
         )
+        header['HIERARCH DESAT OUTLIER_MIN_FLUX'] = (outlier_min_flux,)
         header['HIERARCH DESAT EXPAND_SPECTRAL'] = (
             expand_window_spectral,
             'Window expansion size, spectral dimension',
@@ -187,6 +221,18 @@ def replace_saturated(
             maximum_step,
             'Max group step (spectral & spatial dimensions)',
         )
+        header['HIERARCH DESAT MAX_STEP_TOTAL'] = (
+            maximum_step_total,
+            'Max total group step',
+        )
+        header['HIERARCH DESAT DO_PARTIAL_SATURATION'] = (
+            do_partial_saturation,
+            'Check for partial saturation',
+        )
+        header['HIERARCH DESAT DO_OUTLIER_CHECK'] = (
+            do_outlier_check,
+            'Check for outliers (e.g. cosmic rays)',
+        )
         tools.check_path(path_out)
         hdul.writeto(path_out, overwrite=True)
 
@@ -197,16 +243,21 @@ def replace_saturated_spectra(
     expand_window_spectral: int = EXPAND_WINDOW_SPECTRAL,
     partial_saturation_factor: float = PARTIAL_SATURATION_FACTOR,
     partial_saturation_snr: float = PARTIAL_SATURATION_SNR,
+    partial_saturation_min_flux: float = 0,
     outlier_factor: float = OUTLIER_FACTOR,
     outlier_factor_low_snr1: float = OUTLIER_FACTOR_LOW_SNR1,
     outlier_factor_low_snr2: float = OUTLIER_FACTOR_LOW_SNR2,
     outlier_threshold_low_snr1: float = OUTLIER_THRESHOLD_LOW_SNR1,
     outlier_threshold_low_snr2: float = OUTLIER_THRESHOLD_LOW_SNR2,
-) -> tuple[np.ndarray, np.ndarray]:
+    outlier_min_flux: float = 0,
+    do_partial_saturation: bool = True,
+    do_outlier_check: bool = True,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     spectra = [saturated_to_nan(s) for s in spectra]
     sp = np.full(spectra[0].shape, np.nan)
     indices = np.full(sp.shape, np.nan)
     sp_min_groups = spectra[-1]
+    desat_flags = np.full(sp.shape, 0)
     for sp_idx, sp_reduced in enumerate(spectra):
         snr = sp_reduced / errors[sp_idx]
 
@@ -215,33 +266,46 @@ def replace_saturated_spectra(
 
         # Flag partially saturated values where the new spectrum doesn't look like a
         # cosmic ray (i.e. it's not an outlier), and has a SNR above the threshold
-        bad_sat = (
-            (indices == sp_idx - 1)
-            & (sp > 0)
-            & (snr > partial_saturation_snr)
-            & (sp < sp_reduced * partial_saturation_factor)
-            & (sp_reduced < sp_min_groups * outlier_factor)
-        )
+        if do_partial_saturation:
+            bad_sat = (
+                (indices == sp_idx - 1)
+                & (sp > partial_saturation_min_flux)
+                & (sp_reduced > partial_saturation_min_flux)
+                & (snr > partial_saturation_snr)
+                & (sp < sp_reduced * partial_saturation_factor)
+                & (sp_reduced < sp_min_groups * outlier_factor)
+            )
+        else:
+            bad_sat = np.zeros(sp.shape, dtype=bool)
 
         # Flag values which seem like a cosmic ray (i.e. +ve outlier)
-        bad_cosmic_ray = (
-            (indices == sp_idx - 1)
-            & (sp > 0)
-            & (sp_reduced > 0)
-            & (
-                (
-                    (sp > sp_reduced * outlier_factor)
-                    & (snr > outlier_threshold_low_snr1)
+        if do_outlier_check:
+            bad_cosmic_ray = (
+                (indices == sp_idx - 1)
+                & (sp > outlier_min_flux)
+                & (sp_reduced > outlier_min_flux)
+                & (
+                    (
+                        (sp > sp_reduced * outlier_factor)
+                        & (snr > outlier_threshold_low_snr1)
+                    )
+                    | (
+                        (sp > sp_reduced * outlier_factor_low_snr1)
+                        & (snr > outlier_threshold_low_snr2)
+                    )
+                    | (sp > sp_reduced * outlier_factor_low_snr2)
                 )
-                | (
-                    (sp > sp_reduced * outlier_factor_low_snr1)
-                    & (snr > outlier_threshold_low_snr2)
-                )
-                | (sp > sp_reduced * outlier_factor_low_snr2)
             )
-        )
+        else:
+            bad_cosmic_ray = np.zeros(sp.shape, dtype=bool)
 
         bad_combined = bad_nan | bad_sat | bad_cosmic_ray
+
+        if sp_idx > 0:
+            # On first pass, everything is replaced (as sp is initialised as all NaN)
+            desat_flags[bad_cosmic_ray] = 3
+            desat_flags[bad_sat] = 2
+            desat_flags[bad_nan] = 1
 
         bad_indices = get_indices(bad_combined)
         for a, b in bad_indices:
@@ -252,7 +316,7 @@ def replace_saturated_spectra(
                 continue
             sp[a : b + 1] = sp_reduced[a : b + 1]
             indices[a : b + 1] = sp_idx
-    return sp, indices
+    return sp, indices, desat_flags
 
 
 def expand_spatial_windows(
