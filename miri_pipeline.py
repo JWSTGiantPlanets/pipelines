@@ -457,7 +457,7 @@ class MiriPipeline(Pipeline):
     def stage_directories_to_plot(self) -> tuple[str, ...]:
         return STAGE_DIRECTORIES_TO_PLOT
 
-    def process_steps_list(
+    def process_skip_steps(
         self,
         skip_steps: Collection[Step] | None,
         start_step: Step | None,
