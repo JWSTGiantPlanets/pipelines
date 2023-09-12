@@ -51,6 +51,17 @@ Step: TypeAlias = Literal[
 ]
 RootPath = NewType('RootPath', str)
 
+
+STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
+    'remove_groups': ('stage0', 'stage0'),
+    'stage1': ('stage0', 'stage1'),
+    'stage2': ('stage1', 'stage2'),
+    'stage3': ('stage2', 'stage3'),
+    'navigate': ('stage3', 'stage3'),
+    'desaturate': ('stage3', 'stage3_desaturated'),
+    # later steps overriden in subclasses
+    'plot': ('', 'plots'),
+    'animate': ('', 'animation'),
 }
 
 
@@ -180,17 +191,7 @@ class Pipeline:
         """
         Dictionary containing input and output directories for each step.
         """
-        return {
-            'remove_groups': ('stage0', 'stage0'),
-            'stage1': ('stage0', 'stage1'),
-            'stage2': ('stage1', 'stage2'),
-            'stage3': ('stage2', 'stage3'),
-            'navigate': ('stage3', 'stage3'),
-            'desaturate': ('stage3', 'stage3_desaturated'),
-            # later steps overriden in subclasses
-            'plot': ('', 'plots'),
-            'animate': ('', 'animation'),
-        }
+        return STEP_DIRECTORIES.copy()
 
     @property
     def stage3_file_match_hdr_keys(self) -> tuple[str, ...]:
