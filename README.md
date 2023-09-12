@@ -140,7 +140,7 @@ conda install -c conda-forge ffmpeg
 
 
 ## References
-Fletcher et al. (2023). _Saturn's Atmosphere in Northern Summer Revealed by JWST/MIRI_. Manuscript in preparation.
+Fletcher, L. N., King, O. R. T., Harkett, J., Hammel, H. B., Roman, M. T., Melin, H., et al. (2023). Saturn's atmosphere in northern summer revealed by JWST/MIRI. _Journal of Geophysical Research: Planets_, 128, e2023JE007924. https://doi.org/10.1029/2023JE007924
 
 ## Examples
 
