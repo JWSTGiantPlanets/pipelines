@@ -224,7 +224,6 @@ STAGE_DIRECTORIES_TO_PLOT = (
     'stage3',
     'stage3_desaturated',
     'stage4_despike',
-    'stage5_background',
 )
 
 

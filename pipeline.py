@@ -51,47 +51,7 @@ Step: TypeAlias = Literal[
 ]
 RootPath = NewType('RootPath', str)
 
-MIRI_STEPS = (
-    'remove_groups',
-    'stage1',
-    'stage2',
-    'defringe',
-    'stage3',
-    'navigate',
-    'desaturate',
-    'flat',
-    'despike',
-    'plot',
-    'animate',
-)
-MIRI_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
-    'stage2': {
-        'steps': {
-            'cube_build': {'skip': True},
-            'extract_1d': {'skip': True},
-            'bkg_subtract': {'skip': False},
-        },
-    },
-    'stage3': {
-        'steps': {
-            'extract_1d': {'skip': True},
-            'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
-        }
-    },
 }
-MIRI_STAGE_DIRECTORIES_TO_PLOT = (
-    'stage3',
-    'stage3_desaturated',
-    'stage4_flat',
-    'stage5_despike',
-    'stage6_background',
-)
-MIRI_STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
-    'defringe': ('stage2', 'stage2'),
-    'flat': ('', 'stage4_flat'),
-    'despike': ('stage4_flat', 'stage5_despike'),
-}
-MIRI_BAND_ABC_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
 
 
 class Pipeline:
