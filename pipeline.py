@@ -51,47 +51,18 @@ Step: TypeAlias = Literal[
 ]
 RootPath = NewType('RootPath', str)
 
-MIRI_STEPS = (
-    'remove_groups',
-    'stage1',
-    'stage2',
-    'defringe',
-    'stage3',
-    'navigate',
-    'desaturate',
-    'flat',
-    'despike',
-    'plot',
-    'animate',
-)
-MIRI_DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
-    'stage2': {
-        'steps': {
-            'cube_build': {'skip': True},
-            'extract_1d': {'skip': True},
-            'bkg_subtract': {'skip': False},
-        },
-    },
-    'stage3': {
-        'steps': {
-            'extract_1d': {'skip': True},
-            'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
-        }
-    },
+
+STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
+    'remove_groups': ('stage0', 'stage0'),
+    'stage1': ('stage0', 'stage1'),
+    'stage2': ('stage1', 'stage2'),
+    'stage3': ('stage2', 'stage3'),
+    'navigate': ('stage3', 'stage3'),
+    'desaturate': ('stage3', 'stage3_desaturated'),
+    # later steps overriden in subclasses
+    'plot': ('', 'plots'),
+    'animate': ('', 'animation'),
 }
-MIRI_STAGE_DIRECTORIES_TO_PLOT = (
-    'stage3',
-    'stage3_desaturated',
-    'stage4_flat',
-    'stage5_despike',
-    'stage6_background',
-)
-MIRI_STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
-    'defringe': ('stage2', 'stage2'),
-    'flat': ('', 'stage4_flat'),
-    'despike': ('stage4_flat', 'stage5_despike'),
-}
-MIRI_BAND_ABC_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
 
 
 class Pipeline:
@@ -220,17 +191,7 @@ class Pipeline:
         """
         Dictionary containing input and output directories for each step.
         """
-        return {
-            'remove_groups': ('stage0', 'stage0'),
-            'stage1': ('stage0', 'stage1'),
-            'stage2': ('stage1', 'stage2'),
-            'stage3': ('stage2', 'stage3'),
-            'navigate': ('stage3', 'stage3'),
-            'desaturate': ('stage3', 'stage3_desaturated'),
-            # later steps overriden in subclasses
-            'plot': ('', 'plots'),
-            'animate': ('', 'animation'),
-        }
+        return STEP_DIRECTORIES.copy()
 
     @property
     def stage3_file_match_hdr_keys(self) -> tuple[str, ...]:

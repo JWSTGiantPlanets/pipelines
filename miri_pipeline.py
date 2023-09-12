@@ -239,7 +239,6 @@ STAGE_DIRECTORIES_TO_PLOT = (
     'stage3_desaturated',
     'stage4_flat',
     'stage5_despike',
-    'stage6_background',
 )
 STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
     'defringe': ('stage2', 'stage2'),
