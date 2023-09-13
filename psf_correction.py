@@ -15,65 +15,106 @@ FwhmFunc: TypeAlias = Callable[[float], float]
 """PSF FWHM function"""
 
 
-# Note: for MIRI, PSF FWHM is ~2.5 - ~3.5px for the longest wavelength of each channel
+# Note: for MIRI, PSF FWHM is roughly 3px for the longest wavelength of each channel
 
 
 def correct_file(
     path: str,
+    path_out: str | None = None,
     forward_model_func: ForwardModelFunc | None = None,
     psf_fwhm_func: FwhmFunc | None = None,
-    mask_off_disc: bool = True,
+    mask_off_disc_pixels: bool = True,
     **kwargs,
-) -> tuple[np.ndarray, np.ndarray]:
-    """TODO"""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # TODO docstring
     if forward_model_func is None:
         forward_model_func = default_forward_model_func
     if psf_fwhm_func is None:
         psf_fwhm_func = default_psf_fwhm_func
 
     observation = planetmapper.Observation(path)
-    try:
-        body, transform, parameters = create_dynamically_scaled_body(
-            observation, **kwargs
-        )
-    except TargetTooSmallError:
-        return  # TODO
+    body, transform, parameters = create_dynamically_scaled_body(observation, **kwargs)
+    check_scaling(observation, body, transform)
 
     with fits.open(path) as hdul:
         data_header: fits.Header = hdul['SCI'].header  # type: ignore
         cube: np.ndarray = hdul['SCI'].data  # type: ignore
         wavelengths = tools.get_wavelengths(data_header)
 
-        psf_model = calculate_psf_modelled_cube(
+        psf_model_cube = calculate_psf_modelled_cube(
             cube,
             wavelengths,
             body,
             transform,
-            parameters['rescale'],
             forward_model_func,
             psf_fwhm_func,
         )
 
-        cube_corrected = cube / psf_model
+        with tools.ignore_warnings('divide by zero encountered'):
+            cube_corrected = cube / psf_model_cube
+
         forward_model = forward_model_func(observation)
-        if mask_off_disc:
+        psf_fwhm_arcsec = np.array([psf_fwhm_func(wl) for wl in wavelengths])
+
+        if mask_off_disc_pixels:
             cube_corrected[:, forward_model == 0] = np.nan
 
-    return psf_model, cube_corrected
+        if path_out is not None:
+            header = fits.Header()
+            header.add_comment('Forward model used for PSF correction.')
+            header.add_comment(
+                'This model is convolved with the PSF at each wavelength.'
+            )
+            hdul.append(
+                fits.ImageHDU(
+                    data=forward_model, header=header, name='PSF_FORWARD_MODEL'
+                )
+            )
+
+            header = fits.Header()
+            header.add_comment(
+                'PSF Gaussian FWHM in arcseconds used for PSF correction.'
+            )
+            hdul.append(
+                fits.ImageHDU(
+                    data=psf_fwhm_arcsec, header=header, name='PSF_FWHM_ARCSEC'
+                )
+            )
+
+            header = fits.Header()
+            header.add_comment('PSF model cube used for PSF correction.')
+            header.add_comment(
+                'This is the PSF_FORWARD_MODEL convolved with the PSF at each wavelength.'
+            )
+            hdul.append(fits.ImageHDU(data=psf_model_cube, name='PSF_MODEL_CUBE'))
+
+            header = hdul['PRIMARY'].header  # type: ignore
+            tools.add_header_reduction_note(hdul, 'PSF corrected')
+            for k, v in parameters.items():
+                k = f'HIERARCH PSF {k.upper()}'
+                header[k] = v
+
+            header['HIERARCH PSF FORWARD_MODEL'] = forward_model_func.__name__
+            header['HIERARCH PSF PSF_FWHM'] = psf_fwhm_func.__name__
+            header['HIERARCH PSF MASK_OFF_DISC_PIXELS'] = mask_off_disc_pixels
+
+            tools.check_path(path_out)
+            hdul.writeto(path_out, overwrite=True)
+
+    return forward_model, psf_model_cube, cube_corrected
 
 
 def calculate_psf_modelled_cube(
     cube: np.ndarray,
     wavelengths: np.ndarray,
-    body: planetmapper.BodyXY,
+    body_scaled: planetmapper.BodyXY,
     transform: CoordinateTransform,
-    rescale: int,
     forward_model_func: ForwardModelFunc,
     psf_fwhm_func: FwhmFunc,
 ) -> np.ndarray:
-    """TODO"""
-    forward_model_scaled = forward_model_func(body)
-    arcsec_per_px = body.get_plate_scale_arcsec()
+    # TODO docstring
+    forward_model_scaled = forward_model_func(body_scaled)
+    arcsec_per_px_scaled = body_scaled.get_plate_scale_arcsec()
 
     idxs1 = [transform(i) for i in range(cube.shape[1])]
     idxs2 = [transform(i) for i in range(cube.shape[2])]
@@ -81,9 +122,9 @@ def calculate_psf_modelled_cube(
 
     psf_cube = np.full_like(cube, np.nan)
     for wl_idx, wl in enumerate(wavelengths):
-        fwhm_unscaled_px = psf_fwhm_func(wl) / arcsec_per_px
+        fwhm_scaled_px = psf_fwhm_func(wl) / arcsec_per_px_scaled
         convolved_model_scaled = convolve_image_with_gaussian(
-            forward_model_scaled, fwhm_unscaled_px * rescale
+            forward_model_scaled, fwhm_scaled_px
         )
         model_unscaled = convolved_model_scaled[idxs]
         psf_cube[wl_idx] = model_unscaled
@@ -128,7 +169,7 @@ def default_psf_fwhm_func(wavelength: float) -> float:
 # Helper functions
 def create_scaled_body(
     observation: planetmapper.Observation,
-    resize: int,
+    rescale: int,
     border: int,
 ) -> tuple[planetmapper.BodyXY, CoordinateTransform]:
     """
@@ -137,7 +178,7 @@ def create_scaled_body(
 
     Args:
         observation: Observation to scale.
-        resize: Scaling factor to resize the image by.
+        rescale: Scaling factor to resize the image by.
         border: Number of pixels to add to the border of the image after rescaling.
 
     Returns:
@@ -149,23 +190,24 @@ def create_scaled_body(
 
     nx, ny = observation.get_img_size()
     body.set_img_size(
-        nx * resize + border * 2,
-        ny * resize + border * 2,
+        nx * rescale + border * 2,
+        ny * rescale + border * 2,
     )
-    body.set_r0(observation.get_r0() * resize)
-    body.set_x0(observation.get_x0() * resize + border)
-    body.set_y0(observation.get_y0() * resize + border)
+    body.set_r0(observation.get_r0() * rescale)
+    body.set_x0(observation.get_x0() * rescale + border)
+    body.set_y0(observation.get_y0() * rescale + border)
     body.set_rotation(observation.get_rotation())
 
-    transform: CoordinateTransform = lambda x: x * resize + border
+    transform: CoordinateTransform = lambda x: x * rescale + border
     return body, transform
 
 
 def create_dynamically_scaled_body(
     observation: planetmapper.Observation,
-    min_rescale: int = 2,
+    rescale: int | None = None,
+    min_rescale: int = 5,
     min_disc_diameter_scaled: int = 100,
-    buffer_unscaled: int = 10,
+    buffer_unscaled: int = 6,
     max_target_diameter_to_skip: int = 1,
 ) -> tuple[planetmapper.BodyXY, CoordinateTransform, dict[str, int]]:
     """
@@ -174,6 +216,8 @@ def create_dynamically_scaled_body(
 
     Args:
         observation: Observation to scale.
+        rescale: Scaling factor to resize the image by. If `None`, this will be
+            determined automatically using the following parametets.
         min_rescale: Minimum scaling factor to resize the image by.
         min_disc_diameter_scaled: Minimum pixel diameter of the disc the scaled image.
         buffer_unscaled: Number of pixels to add to the border of the image before
@@ -201,10 +245,11 @@ def create_dynamically_scaled_body(
             f'{max_target_diameter_to_skip} px'
         )
 
-    rescale = max(
-        min_rescale,
-        int(np.ceil(min_disc_diameter_scaled / target_diameter_px)),
-    )
+    if rescale is None:
+        rescale = max(
+            min_rescale,
+            int(np.ceil(min_disc_diameter_scaled / target_diameter_px)),
+        )
     buffer = buffer_unscaled * rescale
     body, transform = create_scaled_body(observation, rescale, buffer)
     parameters = {
@@ -223,6 +268,30 @@ class TargetTooSmallError(Exception):
 
 
 def convolve_image_with_gaussian(image: np.ndarray, fwhm_px: float) -> np.ndarray:
-    """TODO"""
+    # TODO docstring
     sigma_px = fwhm_px / 2.35482  # sigma = FWHM / (2 * sqrt(2 * ln(2)))
     return gaussian_filter(image, sigma=sigma_px, mode='nearest')
+
+
+def check_scaling(
+    unscaled: planetmapper.BodyXY,
+    scaled: planetmapper.BodyXY,
+    transform: CoordinateTransform,
+) -> None:
+    """
+    Run check to ensure unscaled and scaled bodies are consistent.
+    """
+    xy_coords = [
+        (0, 0),
+        (1, 3),
+        (4.56, 7.89),
+        (-0.5, 4.2),
+    ]
+    for x, y in xy_coords:
+        radec_unscaled = unscaled.xy2radec(x, y)
+        radec_scaled = scaled.xy2radec(transform(x), transform(y))
+        if not np.allclose(radec_unscaled, radec_scaled):
+            raise AssertionError(
+                f'Failed consistency check for ({x}, {y}): '
+                f'unscaled: {radec_unscaled}, scaled: {radec_scaled}'
+            )
