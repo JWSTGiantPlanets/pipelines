@@ -1,4 +1,4 @@
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 from typing import Callable, TypeAlias
 
@@ -20,12 +20,25 @@ FwhmFunc: TypeAlias = Callable[[float], float]
 # Note: for MIRI, PSF FWHM is roughly 3px for the longest wavelength of each channel
 
 
+class PsfCorrectionError(Exception):
+    """Base class for PSF correction errors."""
+
+
+class TargetTooSmallError(PsfCorrectionError):
+    """Raised when the target is too small to be scaled."""
+
+
+class TargetNotInFovError(PsfCorrectionError):
+    """Raised when none of the target is in the field of view."""
+
+
 def correct_file(
     path: str,
     path_out: str | None = None,
     forward_model_func: ForwardModelFunc | None = None,
     psf_fwhm_func: FwhmFunc | None = None,
     mask_off_disc_pixels: bool = True,
+    check_target_in_fov: bool = True,
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -51,6 +64,8 @@ def correct_file(
             used.
         mask_off_disc_pixels: If `True`, pixels that are zero in the forward model will
             be set to NaN in the corrected observation.
+        check_target_in_fov: If `True`, raise a `TargetNotInFovError` if none of the
+            target is in the field of view.
         **kwargs: Additional keyword arguments to pass to
             `create_dynamically_scaled_body`.
 
@@ -58,6 +73,10 @@ def correct_file(
         `(forward_model, psf_model_cube, cube_corrected)` tuple where `forward_model`
         is the forward model image, `psf_model_cube` is the PSF model cube, and
         `cube_corrected` is the corrected observation.
+
+    Raises:
+        TargetNotInFovError: If none of the target is in the field of view and
+            `check_target_in_fov` is `True`.
     """
     if forward_model_func is None:
         forward_model_func = default_forward_model_func
@@ -65,6 +84,11 @@ def correct_file(
         psf_fwhm_func = default_psf_fwhm_func
 
     observation = planetmapper.Observation(path)
+
+    forward_model = forward_model_func(observation)
+    if check_target_in_fov and np.all(forward_model == 0):
+        raise TargetNotInFovError('None of the target in field of view')
+
     body, transform, parameters = create_dynamically_scaled_body(observation, **kwargs)
     check_scaling(observation, body, transform)
 
@@ -87,7 +111,6 @@ def correct_file(
             sci_cube_corrected = sci_cube / psf_model_cube
             err_cube_corrected = err_cube / psf_model_cube
 
-        forward_model = forward_model_func(observation)
         psf_fwhm_arcsec = np.array([psf_fwhm_func(wl) for wl in wavelengths])
 
         if mask_off_disc_pixels:
@@ -103,9 +126,7 @@ def correct_file(
             header.add_comment(
                 'This model is convolved with the PSF at each wavelength.'
             )
-            header.add_comment(
-                'This is an unscaled version of the forward model.'
-            )
+            header.add_comment('This is an unscaled version of the forward model.')
             hdul.append(
                 fits.ImageHDU(
                     data=forward_model, header=header, name='PSF_FORWARD_MODEL'
@@ -141,6 +162,7 @@ def correct_file(
             header['HIERARCH PSF FORWARD_MODEL'] = forward_model_func.__name__
             header['HIERARCH PSF PSF_FWHM'] = psf_fwhm_func.__name__
             header['HIERARCH PSF MASK_OFF_DISC_PIXELS'] = mask_off_disc_pixels
+            header['HIERARCH PSF CHECK_TARGET_IN_FOV'] = check_target_in_fov
 
             tools.check_path(path_out)
             hdul.writeto(path_out, overwrite=True)
@@ -323,10 +345,6 @@ def create_dynamically_scaled_body(
         'max_target_diameter_to_skip': max_target_diameter_to_skip,
     }
     return body, transform, parameters
-
-
-class TargetTooSmallError(Exception):
-    """Raised when the target is too small to be scaled."""
 
 
 def convolve_image_with_gaussian(image: np.ndarray, fwhm_px: float) -> np.ndarray:
