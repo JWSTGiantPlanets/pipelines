@@ -328,7 +328,7 @@ def convolve_image_with_gaussian(image: np.ndarray, fwhm_px: float) -> np.ndarra
     Args:
         image: Image to convolve.
         fwhm_px: FWHM of the Gaussian PSF in pixels.
-    
+
     Returns:
         Convolved image.
     """
