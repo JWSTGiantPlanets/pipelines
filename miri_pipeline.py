@@ -492,6 +492,15 @@ class MiriPipeline(Pipeline):
             variants.add('psf')
         return variants
 
+    @property
+    def data_variants_individual_required(self) -> set[str]:
+        variants_required = super().data_variants_individual_required
+        if self.defringe is True:
+            variants_required.add('fringe')
+        if self.correct_psf is True:
+            variants_required.add('psf')
+        return variants_required
+
     def print_reduction_info(self, skip_steps: set[Step]) -> None:
         super().print_reduction_info(skip_steps)
         self.log(f'Defringe: {self.defringe!r}', time=False)

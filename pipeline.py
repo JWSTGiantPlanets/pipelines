@@ -443,11 +443,31 @@ class Pipeline:
             - d1_fringe
             - d1_bg_fringe
         etc.
+
+        See also the `data_variants_individual_required` property.
         """
         variants = set()
         if self.background_subtract:
             variants.add('bg')
         return variants
+
+    @property
+    def data_variants_individual_required(self) -> set[str]:
+        """
+        Data variants that must be included in the dithered folders.
+
+        This must be a subset of the `data_variants_individual` property.
+
+        E.g. if the individual data variants are {'bg', 'fringe'}, and the required
+        variants are {'bg'}, then the following the dithered folders will be created:
+            - d1_bg
+            - d1_bg_fringe
+        i.e. any variant which does not contain 'bg' will not be created.
+        """
+        variants_required = set()
+        if self.background_subtract is True:
+            variants_required.add('bg')
+        return variants_required
 
     @property
     def data_variant_combinations(self) -> set[frozenset[str]]:
@@ -459,6 +479,12 @@ class Pipeline:
         for variant in self.data_variants_individual:
             # For each variant, add it to each existing combination
             combinations.update({c | {variant} for c in combinations})
+
+        # Remove any combinations that don't include the required variants
+        combinations = {
+            c for c in combinations if self.data_variants_individual_required <= c
+        }
+
         return combinations
 
     def test_path_for_data_variants(
