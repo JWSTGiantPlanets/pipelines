@@ -26,7 +26,37 @@ def correct_file(
     mask_off_disc_pixels: bool = True,
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    # TODO docstring
+    """
+    Correct observed flux using a PSF model.
+
+    The forward model (as produced by `forward_model_func`) is convolved with a Gaussian
+    PSF (as defined by `psf_fwhm_func`) at each wavelength. The observed flux is then
+    corrected by dividing by the PSF model. The 'SCI' and 'ERR' extensions of the
+    observation are corrected.
+
+    Args:
+        path: Path to observation to correct.
+        path_out: Path to save corrected observation to. If `None`, the corrected
+            observation will not be saved.
+        forward_model_func: Function to use to generate the forward model. This should
+            take a `planetmapper.BodyXY` object as input and return a numpy array
+            containing the forward model image. If `None`, the default function
+            `default_forward_model_func` will be used. This function should generally
+            have a value of 1 for illuminated pixels and 0 for unilluminated pixels.
+        psf_fwhm_func: Function to use to calculate the PSF FWHM at each wavelength.
+            This should take a wavelength in microns as input and return the PSF FWHM in
+            arcseconds. If `None`, the default function `default_psf_fwhm_func` will be
+            used.
+        mask_off_disc_pixels: If `True`, pixels that are zero in the forward model will
+            be set to NaN in the corrected observation.
+        **kwargs: Additional keyword arguments to pass to
+            `create_dynamically_scaled_body`.
+
+    Returns:
+        `(forward_model, psf_model_cube, cube_corrected)` tuple where `forward_model`
+        is the forward model image, `psf_model_cube` is the PSF model cube, and
+        `cube_corrected` is the corrected observation.
+    """
     if forward_model_func is None:
         forward_model_func = default_forward_model_func
     if psf_fwhm_func is None:
@@ -38,11 +68,12 @@ def correct_file(
 
     with fits.open(path) as hdul:
         data_header: fits.Header = hdul['SCI'].header  # type: ignore
-        cube: np.ndarray = hdul['SCI'].data  # type: ignore
+        sci_cube: np.ndarray = hdul['SCI'].data  # type: ignore
+        err_cube: np.ndarray = hdul['ERR'].data  # type: ignore
         wavelengths = tools.get_wavelengths(data_header)
 
         psf_model_cube = calculate_psf_modelled_cube(
-            cube,
+            sci_cube.shape,
             wavelengths,
             body,
             transform,
@@ -51,15 +82,20 @@ def correct_file(
         )
 
         with tools.ignore_warnings('divide by zero encountered'):
-            cube_corrected = cube / psf_model_cube
+            sci_cube_corrected = sci_cube / psf_model_cube
+            err_cube_corrected = err_cube / psf_model_cube
 
         forward_model = forward_model_func(observation)
         psf_fwhm_arcsec = np.array([psf_fwhm_func(wl) for wl in wavelengths])
 
         if mask_off_disc_pixels:
-            cube_corrected[:, forward_model == 0] = np.nan
+            sci_cube_corrected[:, forward_model == 0] = np.nan
+            err_cube_corrected[:, forward_model == 0] = np.nan
 
         if path_out is not None:
+            hdul['SCI'].data = sci_cube_corrected  # type: ignore
+            hdul['ERR'].data = err_cube_corrected  # type: ignore
+
             header = fits.Header()
             header.add_comment('Forward model used for PSF correction.')
             header.add_comment(
@@ -101,26 +137,44 @@ def correct_file(
             tools.check_path(path_out)
             hdul.writeto(path_out, overwrite=True)
 
-    return forward_model, psf_model_cube, cube_corrected
+    return forward_model, psf_model_cube, sci_cube_corrected
 
 
 def calculate_psf_modelled_cube(
-    cube: np.ndarray,
+    cube_shape: tuple[int, ...],
     wavelengths: np.ndarray,
     body_scaled: planetmapper.BodyXY,
     transform: CoordinateTransform,
     forward_model_func: ForwardModelFunc,
     psf_fwhm_func: FwhmFunc,
 ) -> np.ndarray:
-    # TODO docstring
+    """
+    Calculate a PSF modelled cube by convolving the forward model with a Gaussian PSF
+    at each wavelength.
+
+    Args:
+        cube_shape: Shape of the cube to return.
+        wavelengths: Wavelengths to calculate the PSF modelled cube at.
+        body_scaled: Scaled version of the observation to forward model.
+        transform: Transform from original to scaled pixel coordinates.
+        forward_model_func: Function to use to generate the forward model. This should
+            take a `planetmapper.BodyXY` object as input and return a numpy array
+            containing the forward model image.
+        psf_fwhm_func: Function to use to calculate the PSF FWHM at each wavelength.
+            This should take a wavelength in microns as input and return the PSF FWHM in
+            arcseconds.
+
+    Returns:
+        Numpy array containing the PSF modelled cube.
+    """
     forward_model_scaled = forward_model_func(body_scaled)
     arcsec_per_px_scaled = body_scaled.get_plate_scale_arcsec()
 
-    idxs1 = [transform(i) for i in range(cube.shape[1])]
-    idxs2 = [transform(i) for i in range(cube.shape[2])]
+    idxs1 = [transform(i) for i in range(cube_shape[1])]
+    idxs2 = [transform(i) for i in range(cube_shape[2])]
     idxs = np.ix_(idxs1, idxs2)
 
-    psf_cube = np.full_like(cube, np.nan)
+    psf_cube = np.full(cube_shape, np.nan)
     for wl_idx, wl in enumerate(wavelengths):
         fwhm_scaled_px = psf_fwhm_func(wl) / arcsec_per_px_scaled
         convolved_model_scaled = convolve_image_with_gaussian(
@@ -268,7 +322,16 @@ class TargetTooSmallError(Exception):
 
 
 def convolve_image_with_gaussian(image: np.ndarray, fwhm_px: float) -> np.ndarray:
-    # TODO docstring
+    """
+    Convolve an image with a Gaussian PSF.
+
+    Args:
+        image: Image to convolve.
+        fwhm_px: FWHM of the Gaussian PSF in pixels.
+    
+    Returns:
+        Convolved image.
+    """
     sigma_px = fwhm_px / 2.35482  # sigma = FWHM / (2 * sqrt(2 * ln(2)))
     return gaussian_filter(image, sigma=sigma_px, mode='nearest')
 
