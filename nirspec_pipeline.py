@@ -140,8 +140,8 @@ To use this script you will need to:
     python3 /data/nemesis/jwst/scripts/oliver/pipelines/nirspec_pipeline.py /data/uranus/lon1 --parallel
     
     # Change permissions on modified files so that other users can use them
-    chmod -R --quiet 777 /data/uranus/lon1
-    chmod -R --quiet 777 $CRDS_PATH
+    chmod -R --quiet ugo+rw /data/uranus/lon1
+    chmod -R --quiet ugo+rw $CRDS_PATH
 """
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
