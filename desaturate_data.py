@@ -1,6 +1,8 @@
 """
 Script to desaturate data. See desaturate_saturn.py for an example of using this.
 """
+__version__ = '1.0.0'
+
 import itertools
 import math
 
@@ -175,6 +177,7 @@ def replace_saturated(
         tools.add_header_reduction_note(hdul, 'Desaturated')
         header = hdul['PRIMARY'].header  #  type: ignore
         header['NGROUPS'] = 'Desaturated'
+        header['HIERARCH DESAT VERSION'] = (__version__, 'Software version')
         header['HIERARCH DESAT NFILES'] = (
             len(ngroups),
             'Number of files used in desaturation',

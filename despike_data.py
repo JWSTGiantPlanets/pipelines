@@ -1,3 +1,5 @@
+__version__ = '1.0.0'
+
 import numpy as np
 import tqdm
 from astropy.io import fits
@@ -36,6 +38,7 @@ def despike_cube(
         tools.add_header_reduction_note(hdul, 'Despiked')
         header = hdul['PRIMARY'].header  # type: ignore
 
+        header['HIERARCH CLEAN VERSION'] = (__version__, 'Software version')
         header['HIERARCH CLEAN'] = (True, 'Set bad pixels to NaN')
         header['HIERARCH CLEAN METHOD'] = 'exp_despike'
         header['HIERARCH CLEAN SIZE'] = (size, 'Averaging window size')

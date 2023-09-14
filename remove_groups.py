@@ -1,3 +1,5 @@
+__version__ = '1.0.0'
+
 import os
 
 import numpy as np
@@ -27,6 +29,11 @@ def remove_groups_from_file(path: str, groups_to_use: list[int] | None = None) -
             tools.add_header_reduction_note(
                 hdul, f'Using {ngroups}/{ngroups_full} groups'
             )
+            hdul[0].header['HIERARCH REMOVE_GROUP VERSION'] = (
+                __version__,
+                'Software version',
+            )
+
             root, filename = os.path.split(path)
             root, stage0 = os.path.split(root)
             path_out = os.path.join(

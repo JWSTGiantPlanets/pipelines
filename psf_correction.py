@@ -1,3 +1,5 @@
+__version__ = '1.0.0'
+
 from typing import Callable, TypeAlias
 
 import numpy as np
@@ -126,6 +128,7 @@ def correct_file(
 
             header = hdul['PRIMARY'].header  # type: ignore
             tools.add_header_reduction_note(hdul, 'PSF corrected')
+            header['HIERARCH PSF VERSION'] = (__version__, 'Software version')
             for k, v in parameters.items():
                 k = f'HIERARCH PSF {k.upper()}'
                 header[k] = v
