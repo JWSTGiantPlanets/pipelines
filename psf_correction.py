@@ -1,4 +1,4 @@
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 from typing import Callable, TypeAlias
 
@@ -103,6 +103,9 @@ def correct_file(
             header.add_comment(
                 'This model is convolved with the PSF at each wavelength.'
             )
+            header.add_comment(
+                'This is an unscaled version of the forward model.'
+            )
             hdul.append(
                 fits.ImageHDU(
                     data=forward_model, header=header, name='PSF_FORWARD_MODEL'
@@ -122,9 +125,11 @@ def correct_file(
             header = fits.Header()
             header.add_comment('PSF model cube used for PSF correction.')
             header.add_comment(
-                'This is the PSF_FORWARD_MODEL convolved with the PSF at each wavelength.'
+                'This is the scaled forward model convolved with the PSF at each wavelength.'
             )
-            hdul.append(fits.ImageHDU(data=psf_model_cube, name='PSF_MODEL_CUBE'))
+            hdul.append(
+                fits.ImageHDU(data=psf_model_cube, header=header, name='PSF_MODEL_CUBE')
+            )
 
             header = hdul['PRIMARY'].header  # type: ignore
             tools.add_header_reduction_note(hdul, 'PSF corrected')
