@@ -607,7 +607,6 @@ class MiriPipeline(Pipeline):
 
     def psf_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         p_in, p_out, kwargs = args
-        # TODO add check for TargetTooSmallError
         try:
             psf_correction.correct_file(p_in, p_out, **kwargs)
         except psf_correction.TargetTooSmallError:
