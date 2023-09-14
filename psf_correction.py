@@ -1,4 +1,4 @@
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 from typing import Callable, TypeAlias
 
@@ -290,8 +290,8 @@ def create_dynamically_scaled_body(
     observation: planetmapper.Observation,
     rescale: int | None = None,
     min_rescale: int = 5,
-    min_disc_diameter_scaled: int = 100,
-    buffer_unscaled: int = 6,
+    min_disc_diameter_scaled: int = 150,
+    buffer_unscaled: int = 10,
     max_target_diameter_to_skip: int = 1,
 ) -> tuple[planetmapper.BodyXY, CoordinateTransform, dict[str, int]]:
     """

@@ -620,6 +620,10 @@ class MiriPipeline(Pipeline):
             psf_correction.correct_file(p_in, p_out, **kwargs)
         except psf_correction.TargetTooSmallError:
             self.log(f'Target too small for PSF correction, skipping {p_out}')
+        except psf_correction.TargetNotInFovError:
+            self.log(
+                f'Target not in field of view for PSF correction, skipping {p_out}'
+            )
 
     # flat
     def run_flat(self, kwargs: dict[str, Any]) -> None:
