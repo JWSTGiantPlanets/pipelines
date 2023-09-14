@@ -46,9 +46,11 @@ Step: TypeAlias = Literal[
     'despike',
     'plot',
     'animate',
+    'psf',  # MIRI only
     'flat',  # MIRI only
     'defringe',  # MIRI only
 ]
+BoolOrBoth: TypeAlias = Literal[True, False, 'both']
 RootPath = NewType('RootPath', str)
 
 
@@ -120,7 +122,7 @@ class Pipeline:
         parallel: float | bool = False,
         desaturate: bool = True,
         groups_to_use: list[int] | None | str = None,
-        background_subtract: bool | Literal['both'] = 'both',
+        background_subtract: BoolOrBoth,
         background_path: str | None = None,
         basic_navigation: bool = False,
         step_kwargs: dict[Step, dict[str, Any]] | None | str = None,
@@ -376,12 +378,16 @@ class Pipeline:
 
     # path getting/filtering...
     def get_paths(
-        self, root: RootPath, *path_parts: str, filter_variants: bool = False
+        self,
+        root: RootPath,
+        *path_parts: str,
+        filter_variants: bool = False,
+        variant_combinations: set[frozenset[str]] | None = None,
     ) -> list[str]:
         """Get a list of paths matching the given path parts."""
         paths = sorted(glob.glob(os.path.join(root, *path_parts)))
         if filter_variants:
-            paths = self.filter_paths_for_data_variants(paths)
+            paths = self.filter_paths_for_data_variants(paths, variant_combinations)
         return paths
 
     @property
@@ -455,34 +461,48 @@ class Pipeline:
             combinations.update({c | {variant} for c in combinations})
         return combinations
 
-    def test_path_for_data_variants(self, path: str) -> bool:
+    def test_path_for_data_variants(
+        self, path: str, variant_combinations: set[frozenset[str]] | None = None
+    ) -> bool:
         """
         Test if the given path contains the valid data variants.
 
         Args:
             path: Path to test.
+            variant_combinations: Set of variant combinations to test against. If None,
+                then the `data_variant_combinations` property is used.
 
         Returns:
             True if the path contains the valid data variants, False otherwise.
         """
+        if variant_combinations is None:
+            variant_combinations = self.data_variant_combinations
         dirname = pathlib.Path(path).parts[-2]
         # dirnames are of format d1_bg_fringe, so split on _ to get variants and drop
         # the first element (the dither number/combination). Use a set to ensure order
         # doesn't matter
         path_variants = frozenset(dirname.split('_')[1:])
-        return path_variants in self.data_variant_combinations
+        return path_variants in variant_combinations
 
-    def filter_paths_for_data_variants(self, paths: list[str]) -> list[str]:
+    def filter_paths_for_data_variants(
+        self, paths: list[str], variant_combinations: set[frozenset[str]] | None = None
+    ) -> list[str]:
         """
         Filter a list of paths to only include those containing the valid data variants.
 
         Args:
             paths: List of paths to filter.
+            variant_combinations: Set of variant combinations to test against. If None,
+                then the `data_variant_combinations` property is used.
 
         Returns:
             Filtered list of paths.
         """
-        return [p for p in paths if self.test_path_for_data_variants(p)]
+        return [
+            p
+            for p in paths
+            if self.test_path_for_data_variants(p, variant_combinations)
+        ]
 
     def get_file_match_key(
         self, path: str | fits.Header, hdr_keys: tuple[str, ...]
@@ -649,11 +669,18 @@ class Pipeline:
         dir_in, dir_out = self.step_directories['stage3']
         for root_path in self.iterate_group_root_paths():
             paths_list: list[tuple[str, str]] = []
+            variants_done = set()
             for variant in self.data_variant_combinations:
+                variant, paths_in = self.get_stage3_variant_paths_in(root_path, variant)
+                # Skip if we have already done this variant. E.g. for MIRI, the PSF
+                # variants occur after stage3, so {'psf'} and {'psf', 'bg'} are
+                # equivalent.
+                if variant in variants_done:
+                    continue
+                variants_done.add(variant)
                 variant_dirname = '_'.join(sorted(variant))
                 if len(variant) > 0:
                     variant_dirname = f'_{variant_dirname}'
-                paths_in = self.get_stage3_variant_paths_in(root_path, variant)
                 grouped_files = self.group_stage2_files_for_stage3(paths_in)
 
                 # Only need to include the tile in prodname if it is needed to avoid
@@ -707,16 +734,18 @@ class Pipeline:
 
     def get_stage3_variant_paths_in(
         self, root_path: RootPath, variant: frozenset[str]
-    ) -> list[str]:
+    ) -> tuple[frozenset[str], list[str]]:
         """
         Get list of input paths for a given variant for stage3.
         """
         dir_in, dir_out = self.step_directories['stage3']
         if variant == frozenset():
-            return self.get_paths(root_path, dir_in, '*cal.fits')
+            paths = self.get_paths(root_path, dir_in, '*cal.fits')
         elif variant == frozenset({'bg'}):
-            return self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
-        raise ValueError(f'Unknown variant: {variant}')
+            paths = self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
+        else:
+            raise ValueError(f'Unknown variant: {variant}')
+        return variant, paths
 
     def group_stage2_files_for_stage3(
         self, paths_in: list[str]
