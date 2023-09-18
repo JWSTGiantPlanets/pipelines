@@ -504,7 +504,7 @@ class MiriPipeline(Pipeline):
     def print_reduction_info(self, skip_steps: set[Step]) -> None:
         super().print_reduction_info(skip_steps)
         self.log(f'Defringe: {self.defringe!r}', time=False)
-        self.log(f'Correct psf: {self.correct_psf!r}', time=False)
+        self.log(f'Correct PSF: {self.correct_psf!r}', time=False)
         self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
 
     # Step overrides
