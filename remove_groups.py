@@ -32,7 +32,7 @@ def remove_groups_from_file(path: str, groups_to_use: list[int] | None = None) -
             hdul[0].header['HIERARCH REMOVE_GROUP VERSION'] = (
                 __version__,
                 'Software version',
-            )
+            ) # type: ignore
 
             root, filename = os.path.split(path)
             root, stage0 = os.path.split(root)
