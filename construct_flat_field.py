@@ -1,3 +1,5 @@
+__version__ = '1.0.0'
+
 import datetime
 import math
 import statistics
@@ -236,6 +238,7 @@ def do_tile(
     )
 
     header = fits.Header()
+    header[f'HIERARCH {HEADER_PREFIX} VERSION'] = (__version__, 'Software version')
     header[f'HIERARCH {HEADER_PREFIX} DATE'] = datetime.datetime.now().isoformat()
     header[f'HIERARCH {HEADER_PREFIX} LAT_BIN_SIZE_FACTOR'] = lat_bin_size_factor
     header[f'HIERARCH {HEADER_PREFIX} BIN_ASPECT'] = bin_aspect

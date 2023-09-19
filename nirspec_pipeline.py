@@ -140,8 +140,8 @@ To use this script you will need to:
     python3 /data/nemesis/jwst/scripts/oliver/pipelines/nirspec_pipeline.py /data/uranus/lon1 --parallel
     
     # Change permissions on modified files so that other users can use them
-    chmod -R --quiet 777 /data/uranus/lon1
-    chmod -R --quiet 777 $CRDS_PATH
+    chmod -R --quiet ugo+rw /data/uranus/lon1
+    chmod -R --quiet ugo+rw $CRDS_PATH
 """
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
@@ -186,11 +186,11 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --start_step desaturate
 # Run the pipeline, passing custom arguments to different steps
 python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
 """
-from typing import Any, Collection, Literal
+from typing import Any, Collection
 
 from jwst.assign_wcs.util import NoDataOnDetectorError
 
-from pipeline import Pipeline, Step, get_pipeline_argument_parser
+from pipeline import BoolOrBoth, Pipeline, Step, get_pipeline_argument_parser
 
 # Pipeline constants for NIRSpec
 STEPS: tuple[Step, ...] = (
@@ -236,7 +236,7 @@ def run_pipeline(
     parallel: float | bool = False,
     desaturate: bool = True,
     groups_to_use: list[int] | None = None,
-    background_subtract: bool | Literal['both'] = 'both',
+    background_subtract: BoolOrBoth = 'both',
     background_path: str | None = None,
     basic_navigation: bool = False,
     step_kwargs: dict[Step, dict[str, Any]] | None = None,

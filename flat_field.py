@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+__version__ = '1.0.0'
+
 import numpy as np
 from astropy.io import fits
 
@@ -31,6 +33,8 @@ def apply_flat(
         hdul['DQ'].data[np.isnan(hdul['SCI'].data)] += 1  #  type: ignore
 
         tools.add_header_reduction_note(hdul, 'Flat field corrected')
+        header['HIERARCH FLAT VERSION'] = (__version__, 'Software version')
+
         for k, v in flat_header.items():
             if GENERATION_HEADER_PREFIX in k:
                 if not k.upper().startswith('HIERARCH'):

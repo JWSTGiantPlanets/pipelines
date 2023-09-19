@@ -148,8 +148,8 @@ To use this script you will need to:
     python3 /data/nemesis/jwst/scripts/oliver/pipelines/miri_pipeline.py /data/uranus/lon1 --parallel
     
     # Change permissions on modified files so that other users can use them
-    chmod -R --quiet 777 /data/uranus/lon1
-    chmod -R --quiet 777 $CRDS_PATH
+    chmod -R --quiet ugo+rw /data/uranus/lon1
+    chmod -R --quiet ugo+rw $CRDS_PATH
 """
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
@@ -195,15 +195,17 @@ python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outl
 """
 import argparse
 import os
-from typing import Any, Collection, Literal
+import pathlib
+from typing import Any, Collection
 
 import tqdm
 from astropy.io import fits
 from jwst.residual_fringe import ResidualFringeStep
 
 import flat_field
+import psf_correction
 from parallel_tools import runmany
-from pipeline import Pipeline, RootPath, Step, get_pipeline_argument_parser
+from pipeline import BoolOrBoth, Pipeline, RootPath, Step, get_pipeline_argument_parser
 
 # Pipeline constants for MIRI
 STEPS = (
@@ -213,6 +215,7 @@ STEPS = (
     'defringe',
     'stage3',
     'navigate',
+    'psf',
     'desaturate',
     'flat',
     'despike',
@@ -243,6 +246,7 @@ STAGE_DIRECTORIES_TO_PLOT = (
 STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
     'defringe': ('stage2', 'stage2'),
     'flat': ('', 'stage4_flat'),
+    'psf': ('stage3', 'stage3'),
     'despike': ('stage4_flat', 'stage5_despike'),
 }
 
@@ -281,13 +285,14 @@ def run_pipeline(
     parallel: float | bool = False,
     desaturate: bool = True,
     groups_to_use: list[int] | None = None,
-    background_subtract: bool | Literal['both'] = 'both',
+    background_subtract: BoolOrBoth = 'both',
     background_path: str | None = None,
     basic_navigation: bool = False,
     step_kwargs: dict[Step, dict[str, Any]] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
-    defringe: bool | Literal['both'] = 'both',
+    defringe: BoolOrBoth = 'both',
+    correct_psf: BoolOrBoth = 'both',
     flat_data_path: str = DEFAULT_FLAT_DATA_PATH,
 ) -> None:
     """
@@ -389,6 +394,12 @@ def run_pipeline(
             defringing enabled. Defringed data will be saved in separate directories
             (e.g. `root_path/stage3/d1_fringe`), so both sets of data will be available
             for further analysis.
+        correct_psf: Toggle PSF correction of the data. If True, PSF corrected data will
+            be saved and processed. If `'both'` (the default), the pipeline steps will
+            effectively be run twice, first without PSF correction, then again with PSF
+            correction enabled. PSF corrected data will be saved in separate directories
+            (e.g. `root_path/stage3/d1_psf`), so both sets of data will be available
+            for further analysis.
         flat_data_path: Optionally specify custom path to the flat field data. This path
             should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
             be replaced by appropriate values for each channel, band and defringe
@@ -407,6 +418,7 @@ def run_pipeline(
         reduction_parallel_kwargs=reduction_parallel_kwargs,
         flat_data_path=flat_data_path,
         defringe=defringe,
+        correct_psf=correct_psf,
     )
     pipeline.run(
         skip_steps=skip_steps,
@@ -420,12 +432,14 @@ class MiriPipeline(Pipeline):
         self,
         *args,
         flat_data_path: str,
-        defringe: bool | Literal['both'] = 'both',
+        defringe: BoolOrBoth = 'both',
+        correct_psf: BoolOrBoth = 'both',
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.flat_data_path = self.standardise_path(flat_data_path)
         self.defringe = defringe
+        self.correct_psf = correct_psf
 
     @staticmethod
     def get_instrument() -> str:
@@ -465,6 +479,8 @@ class MiriPipeline(Pipeline):
         skip_steps = super().process_skip_steps(skip_steps, start_step, end_step)
         if not self.defringe:
             skip_steps.add('defringe')
+        if not self.correct_psf:
+            skip_steps.add('psf')
         return skip_steps
 
     @property
@@ -472,11 +488,23 @@ class MiriPipeline(Pipeline):
         variants = super().data_variants_individual
         if self.defringe:
             variants.add('fringe')
+        if self.correct_psf:
+            variants.add('psf')
         return variants
+
+    @property
+    def data_variants_individual_required(self) -> set[str]:
+        variants_required = super().data_variants_individual_required
+        if self.defringe is True:
+            variants_required.add('fringe')
+        if self.correct_psf is True:
+            variants_required.add('psf')
+        return variants_required
 
     def print_reduction_info(self, skip_steps: set[Step]) -> None:
         super().print_reduction_info(skip_steps)
         self.log(f'Defringe: {self.defringe!r}', time=False)
+        self.log(f'Correct PSF: {self.correct_psf!r}', time=False)
         self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
 
     # Step overrides
@@ -494,6 +522,7 @@ class MiriPipeline(Pipeline):
             }
         return super().reduction_detector1_fn((path_in, output_dir, kwargs))
 
+    # defringe
     def run_defringe(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['defringe']
         for root_path in self.iterate_group_root_paths():
@@ -514,23 +543,90 @@ class MiriPipeline(Pipeline):
             path_in, output_dir=output_dir, save_results=True, skip=False, **kwargs
         )
 
+    # stage3
     def get_stage3_variant_paths_in(
         self, root_path: RootPath, variant: frozenset[str]
-    ) -> list[str]:
+    ) -> tuple[frozenset[str], list[str]]:
         """
         Get list of input paths for a given variant for stage3.
         """
         dir_in, dir_out = self.step_directories['stage3']
+        variant = variant - {'psf'}  # psf is done after stage3
         if variant == frozenset():
-            return self.get_paths(root_path, dir_in, '*cal.fits')
+            paths = self.get_paths(root_path, dir_in, '*cal.fits')
         elif variant == frozenset({'bg'}):
-            return self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
+            paths = self.get_paths(root_path, dir_in, 'bg', '*cal.fits')
         elif variant == frozenset({'bg', 'fringe'}):
-            return self.get_paths(root_path, dir_in, 'bg', '*residual_fringe.fits')
+            paths = self.get_paths(root_path, dir_in, 'bg', '*residual_fringe.fits')
         elif variant == frozenset({'fringe'}):
-            return self.get_paths(root_path, dir_in, '*residual_fringe.fits')
-        raise ValueError(f'Unknown variant: {variant}')
+            paths = self.get_paths(root_path, dir_in, '*residual_fringe.fits')
+        else:
+            raise ValueError(f'Unknown variant: {variant}')
+        return variant, paths
 
+    # psf
+    def run_psf(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['psf']
+        input_variant_combinations = {
+            v - {'psf'} for v in self.data_variant_combinations if 'psf' in v
+        }
+        for root_path in self.iterate_group_root_paths():
+            paths_list: list[tuple[str, str]] = []
+            for input_variant in input_variant_combinations:
+                output_variant = input_variant | {'psf'}
+                paths_in = self.get_paths(
+                    root_path,
+                    dir_in,
+                    '*',
+                    '*_nav.fits',
+                    filter_variants=True,
+                    variant_combinations={input_variant},
+                )
+                for p_in in paths_in:
+                    # We need to add the psf variant to the path
+                    dirname_in = pathlib.Path(p_in).parts[-2]
+                    dirname_without_variant = dirname_in.split('_')[0]
+                    dirname_variants = frozenset(dirname_in.split('_')[1:])
+                    dirname_out = (
+                        dirname_without_variant + '_' + '_'.join(sorted(output_variant))
+                    )
+                    if dirname_variants != input_variant:
+                        raise ValueError(
+                            f'Error when checking variant path for {p_in}'
+                            f'(expected variant {input_variant!r}, got {dirname_variants!r})'
+                        )
+
+                    p_out = self.replace_path_part(p_in, -3, dir_out, old=dir_in)
+                    p_out = self.replace_path_part(
+                        p_out, -2, dirname_out, old=dirname_in
+                    )
+                    if p_out == p_in:
+                        raise ValueError(
+                            f'Error when checking output path for {p_in}'
+                            '(input and output paths are the same)'
+                        )
+
+                    paths_list.append((p_in, p_out))
+            args_list = [(p_in, p_out, kwargs) for p_in, p_out in paths_list]
+            runmany(
+                self.psf_fn,
+                args_list,
+                desc='psf',
+                **self.reduction_parallel_kwargs,
+            )
+
+    def psf_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
+        p_in, p_out, kwargs = args
+        try:
+            psf_correction.correct_file(p_in, p_out, **kwargs)
+        except psf_correction.TargetTooSmallError:
+            self.log(f'Target too small for PSF correction, skipping {p_out}')
+        except psf_correction.TargetNotInFovError:
+            self.log(
+                f'Target not in field of view for PSF correction, skipping {p_out}'
+            )
+
+    # flat
     def run_flat(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['flat']
         self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
@@ -550,6 +646,7 @@ class MiriPipeline(Pipeline):
             )
             flat_field.apply_flat(p_in, p_out, p_flat, **kwargs)
 
+    # plot
     def get_plot_filename_prefix(self, path: str) -> str:
         with fits.open(path) as hdul:
             hdr = hdul['PRIMARY'].header  #  type: ignore
@@ -575,6 +672,14 @@ def main():
             should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
             be replaced by appropriate values for each channel, band and defringe
             setting.""",
+    )
+    parser.add_argument(
+        '--correct_psf',
+        action=argparse.BooleanOptionalAction,
+        default='both',
+        help="""Toggle PSF correction of the data. If unspecified, the pipeline steps
+            will effectively be run twice, first without PSF correction, then again with
+            PSF correction enabled.""",
     )
     run_pipeline(**vars(parser.parse_args()))
 
