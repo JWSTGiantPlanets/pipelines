@@ -125,7 +125,7 @@ def make_summary_plot(
     data_row = 4
     sat_row = 5
 
-    reduction_notes = []
+    reduction_notes: list[str] = []
     with fits.open(path_in) as hdul:
         data = hdul['SCI'].data  # type: ignore
         primary_header = hdul['PRIMARY'].header  # type: ignore
@@ -137,6 +137,9 @@ def make_summary_plot(
             lon_img = np.full_like(ra_img, np.nan)
         else:
             lon_img = hdul['LON'].data  # type: ignore
+
+        pmap = primary_header['CRDS_CTX']
+        reduction_notes.append(f'CRDS context: {pmap}')
 
         if primary_header.get('S_BKDSUB') == 'COMPLETE':
             reduction_notes.append('Background subtracted')
