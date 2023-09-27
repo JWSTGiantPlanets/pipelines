@@ -696,11 +696,14 @@ class Pipeline:
         for root_path in self.iterate_group_root_paths():
             paths_list: list[tuple[str, str]] = []
             variants_done = set()
-            for variant in self.data_variant_combinations:
-                variant, paths_in = self.get_stage3_variant_paths_in(root_path, variant)
+            for full_variant in self.data_variant_combinations:
+                variant, paths_in = self.get_stage3_variant_paths_in(
+                    root_path, full_variant
+                )
                 # Skip if we have already done this variant. E.g. for MIRI, the PSF
-                # variants occur after stage3, so {'psf'} and {'psf', 'bg'} are
-                # equivalent.
+                # variants occur after stage3, so fulll_variant={'bg'} and
+                # full_variant={'psf', 'bg'} are equivalent, so both will have
+                # variant={'bg'}.
                 if variant in variants_done:
                     continue
                 variants_done.add(variant)
@@ -763,6 +766,11 @@ class Pipeline:
     ) -> tuple[frozenset[str], list[str]]:
         """
         Get list of input paths for a given variant for stage3.
+
+        The returned variant may be a subset of the input variant if the variant
+        contains a component produced after stage3. E.g. for MIRI, the PSF variants
+        occur after stage3, so {'bg'} and {'bg', 'psf'} are equivalent when used as
+        input to stage3.
         """
         dir_in, dir_out = self.step_directories['stage3']
         if variant == frozenset():

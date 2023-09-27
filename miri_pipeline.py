@@ -547,9 +547,6 @@ class MiriPipeline(Pipeline):
     def get_stage3_variant_paths_in(
         self, root_path: RootPath, variant: frozenset[str]
     ) -> tuple[frozenset[str], list[str]]:
-        """
-        Get list of input paths for a given variant for stage3.
-        """
         dir_in, dir_out = self.step_directories['stage3']
         variant = variant - {'psf'}  # psf is done after stage3
         if variant == frozenset():
