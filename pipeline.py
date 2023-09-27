@@ -785,10 +785,12 @@ class Pipeline:
         self, paths_in: list[str]
     ) -> dict[tuple[int | None, str, tuple[str | None, ...]], list[str]]:
         out: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]] = {}
+        dither_options = set()
         for p_in in paths_in:
             with fits.open(p_in) as hdul:
                 hdr = hdul[0].header  #  type: ignore
             dither = int(hdr['PATT_NUM'])
+            dither_options.add(dither)
             tile = hdr['ACT_ID']
             match_key = self.get_file_match_key_for_stage3(hdr)
 
@@ -798,6 +800,14 @@ class Pipeline:
                 (None, tile, match_key),
             ]:
                 out.setdefault(k, []).append(p_in)
+
+        if len(dither_options) == 1:
+            # If there is only a single dither, we can skip dither combination
+            out = {
+                (dither, tile, match_key): paths_in
+                for (dither, tile, match_key), paths_in in out.items()
+                if dither is not None
+            }
         return out
 
     def get_file_match_key_for_stage3(
