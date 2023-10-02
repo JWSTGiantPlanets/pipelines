@@ -1011,12 +1011,14 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--groups_to_use',
+        '--groups-to-use',
         type=str,
         help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will
             keep the first four groups. If unspecified, all groups will be kept.""",
     )
     parser.add_argument(
         '--background_subtract',
+        '--background-subtract',
         action=argparse.BooleanOptionalAction,
         default='both',
         help="""Toggle background subtractio of the data. If unspecified, then versions
@@ -1025,6 +1027,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--background_path',
+        '--background-path',
         type=str,
         help="""Path to directory containing background data. For example, if
             your `root_path` is `/data/uranus/lon1`, the `background_path` may
@@ -1035,6 +1038,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--basic_navigation',
+        '--basic-navigation',
         action='store_true',
         help="""Use basic navigation, and only save RA and Dec backplanes (e.g. useful
             for small bodies). By default, full navigation is performed, generating a
@@ -1044,6 +1048,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--step_kwargs',
+        '--step-kwargs',
         '--kwargs',
         type=str,
         help="""JSON string containing keyword arguments to pass to individual pipeline
@@ -1054,6 +1059,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--skip_steps',
+        '--skip-steps',
         nargs='+',
         type=str,
         help="""List of steps to skip. This is generally only useful if you are
@@ -1062,12 +1068,14 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--start_step',
+        '--start-step',
         type=str,
         help="""Convenience argument to add all steps before `start_step` to 
             `skip_steps`.""",
     )
     parser.add_argument(
         '--end_step',
+        '--end-step',
         type=str,
         help="""Convenience argument to add all steps steps after `end_step` to 
             `skip_steps`.""",

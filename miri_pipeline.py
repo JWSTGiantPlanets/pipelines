@@ -664,6 +664,7 @@ def main():
     )
     parser.add_argument(
         '--flat_data_path',
+        '--flat-data-path',
         type=str,
         help="""Optionally specify custom path to the flat field data. This path
             should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
@@ -672,6 +673,7 @@ def main():
     )
     parser.add_argument(
         '--correct_psf',
+        '--correct-psf',
         action=argparse.BooleanOptionalAction,
         default='both',
         help="""Toggle PSF correction of the data. If unspecified, the pipeline steps
