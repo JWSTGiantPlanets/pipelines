@@ -122,18 +122,20 @@ The walltime and memory requirements have been tested for the giant planet obser
 etc., you may need to increase the walltime and decrease the number of nodes (ppn).
 
 To use this script you will need to:
-- replace `py310` in the `conda activate` line to the name of your conda environment
+- replace `py311` in the `conda activate` line to the name of your conda environment
 - replace the two references to `/data/uranus/lon1` with the path to your data :: 
 
     #!/bin/bash
     #
-    #PBS -N MIRI_Pipeline
-    #PBS -l walltime=24:00:00
-    #PBS -l vmem=80gb
-    #PBS -l nodes=1:ppn=8
+    #SBATCH --job-name=MIRI_Pipeline
+    #SBATCH --time=24:00:00
+    #SBATCH --mem=80G
+    #SBATCH --ntasks=8
+    #SBATCH --export=NONE
+    #SBATCH --account=nemesis
     
-    source ~/.bashrc 
-    conda activate py310 # <-- replace this with the name of your conda environment
+    source ~/.bashrc
+    conda activate py311
 
     export CRDS_PATH="/data/nemesis/jwst/crds_cache"
     export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
