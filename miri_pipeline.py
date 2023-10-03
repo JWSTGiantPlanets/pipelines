@@ -141,7 +141,7 @@ To use this script you will need to:
     export CRDS_PATH="/data/nemesis/jwst/crds_cache"
     export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
 
-    # Optionally redirect the verbose `reduction` step output to the file `pipeline.log`
+    # Optionally redirect the verbose stage1-3 logging to the file `pipeline.log`
     if [ -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" ]; then
         cp -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" .
         echo "Copied stpipe-log.cfg to current working directory"
@@ -149,10 +149,14 @@ To use this script you will need to:
 
     # Run the pipeline
     python3 /data/nemesis/jwst/scripts/oliver/pipelines/miri_pipeline.py /data/uranus/lon1 --parallel
-    
+    exit_code=$?
+
     # Change permissions on modified files so that other users can use them
     chmod -R --quiet ugo+rw /data/uranus/lon1
     chmod -R --quiet ugo+rw $CRDS_PATH
+
+    # Exit script with the same exit code as the pipeline
+    exit $exit_code 
 """
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
