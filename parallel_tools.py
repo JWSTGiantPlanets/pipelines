@@ -12,6 +12,11 @@ from tools import log
 
 T = TypeVar('T')
 
+SCHEDULER_NTASKS_ENVIRONMENT_VARIABLES: tuple[str, ...] = (
+    'SLURM_NTASKS',
+    'PBS_NUM_PPN',
+)
+
 
 def runmany(
     function: Callable[[T], Any],
@@ -99,11 +104,20 @@ def runmany(
 
 
 def get_max_processors(parallel_frac: float = 1) -> int:
-    try:
-        # Get the number of processors per node when running on ALICE
-        num_cores = int(os.environ['PBS_NUM_PPN'])
-    except (KeyError, ValueError):
+    num_cores = None
+
+    # Get the number of processors per node when running on job scheduler (e.g. ALICE)
+    for env_var in SCHEDULER_NTASKS_ENVIRONMENT_VARIABLES:
+        try:
+            num_cores = int(os.environ[env_var])
+            break
+        except (KeyError, ValueError):
+            pass
+
+    # Fall back to the total number of cores on the machine
+    if num_cores is None:
         num_cores = multiprocessing.cpu_count()
+
     return max(int(num_cores * parallel_frac), 1)
 
 
