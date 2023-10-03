@@ -1,4 +1,4 @@
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 import datetime
 import math
@@ -15,14 +15,14 @@ import tools
 VARIABLE_HEADER_KEYS = ['DATE', 'DATASET']
 HEADER_PREFIX = flat_field.GENERATION_HEADER_PREFIX
 
-CorrespondingPixels: TypeAlias = dict[
-    tuple[int, tuple[int, int]], set[tuple[int, tuple[int, int]]]
-]
+CorrespondingPixelKey: TypeAlias = tuple[int, tuple[int, int]]
+CorrespondingPixels: TypeAlias = dict[CorrespondingPixelKey, set[CorrespondingPixelKey]]
 PixelRatios: TypeAlias = dict[tuple[int, int], list[tuple[tuple[int, int], float]]]
 
 
 def construct_flat_cube(
     paths: list[str],
+    *,
     lat_bin_size_factor: float,
     bin_aspect: float,
     emission_cutoff: float,
@@ -31,6 +31,7 @@ def construct_flat_cube(
     sigma_iterations: int,
     snr_threshold: float,
     max_correction: float,
+    header: fits.Header | None = None,
     **tqdm_kw,
 ) -> np.ndarray:
     cubes: list[np.ndarray] = []
@@ -69,7 +70,7 @@ def construct_flat_cube(
 
     flat_cube = np.ones(shape)
 
-    corresponding_pixels = calculate_corresponding_pixels(
+    corresponding_pixels, lonlat_comparison_radius = calculate_corresponding_pixels(
         coord_images, lat_bin_size_factor, bin_aspect, emission_cutoff
     )
 
@@ -98,6 +99,19 @@ def construct_flat_cube(
             )
             flat_cube[idx] = flat_img
 
+    if header is not None:
+        header[f'HIERARCH {HEADER_PREFIX} LAT_BIN_SIZE_FACTOR'] = lat_bin_size_factor
+        header[f'HIERARCH {HEADER_PREFIX} BIN_ASPECT'] = bin_aspect
+        header[f'HIERARCH {HEADER_PREFIX} EMISSION_CUTOFF'] = emission_cutoff
+        header[f'HIERARCH {HEADER_PREFIX} ITERATIONS'] = iterations
+        header[f'HIERARCH {HEADER_PREFIX} NSIGMA'] = nsigma
+        header[f'HIERARCH {HEADER_PREFIX} SIGMA_ITERATIONS'] = sigma_iterations
+        header[f'HIERARCH {HEADER_PREFIX} SNR_THRESHOLD'] = snr_threshold
+        header[f'HIERARCH {HEADER_PREFIX} MAX_CORRECTION'] = max_correction
+        header[
+            f'HIERARCH {HEADER_PREFIX} LONLAT_COMPARISON_RADIUS'
+        ] = lonlat_comparison_radius
+
     return flat_cube
 
 
@@ -106,34 +120,34 @@ def calculate_corresponding_pixels(
     lat_bin_size_factor: float,
     bin_aspect: float,
     emission_cutoff: float,
-) -> CorrespondingPixels:
+) -> tuple[CorrespondingPixels, float]:
     lat_images = [lat_img for lon_img, lat_img, emission_img in coord_images]
     lat_diff = (
         np.nanmedian(np.diff(lat_images, axis=1)) ** 2
         + np.nanmedian(np.diff(lat_images, axis=2)) ** 2
     ) ** 0.5
-    lonlat_comparison_radius = lat_diff * lat_bin_size_factor
+    lonlat_comparison_radius = float(lat_diff * lat_bin_size_factor)
 
     corresponding_pixels: CorrespondingPixels = {}
     for img_idx, (lon_img, lat_img, emission_img) in enumerate(coord_images):
         for idxs, emission in np.ndenumerate(emission_img):
-            if not emission < emission_cutoff:
+            if not emission < emission_cutoff:  #  type: ignore
                 # Automatically checks for NaNs too
                 continue
             lon = lon_img[idxs]
             lat = lat_img[idxs]
-            key = (img_idx, idxs)
+            key = (img_idx, (idxs[0], idxs[1]))
             corresponding_pixels.setdefault(key, set())
             for img2_idx, (lon_img2, lat_img2, emission_img2) in enumerate(
                 coord_images
             ):
                 for idxs2, emission2 in np.ndenumerate(emission_img2):
-                    key2 = (img2_idx, idxs2)
+                    key2 = (img2_idx, (idxs2[0], idxs2[1]))
                     if key2 in corresponding_pixels:
                         if key in corresponding_pixels[key2]:
                             corresponding_pixels[key].add(key2)
                     else:
-                        if not emission2 < emission_cutoff:
+                        if not emission2 < emission_cutoff:  #  type: ignore
                             continue
                         dlat = lat - lat_img2[idxs2]
                         # Do partial checks first for speed
@@ -144,7 +158,7 @@ def calculate_corresponding_pixels(
                             continue
                         if dlat**2 + dlon**2 < lonlat_comparison_radius**2:
                             corresponding_pixels[key].add(key2)
-    return corresponding_pixels
+    return corresponding_pixels, lonlat_comparison_radius
 
 
 def calculate_flat_image(
@@ -214,7 +228,7 @@ def do_tile(
     fringe: str,
     dataset: str,
     *,
-    lat_bin_size_factor: float = 1,
+    lat_bin_size_factor: float = 1.25,
     bin_aspect: float = 1,
     emission_cutoff: float = 75,
     iterations: int = 50,
@@ -223,6 +237,14 @@ def do_tile(
     snr_threshold: float = 10,
     max_correction: float = 1.5,
 ):
+    header = fits.Header()
+    header[f'HIERARCH {HEADER_PREFIX} VERSION'] = (__version__, 'Software version')
+    header[f'HIERARCH {HEADER_PREFIX} DATE'] = datetime.datetime.now().isoformat()
+    header[f'HIERARCH {HEADER_PREFIX} DATASET'] = dataset
+    header[f'HIERARCH {HEADER_PREFIX} CHANNEL'] = channel
+    header[f'HIERARCH {HEADER_PREFIX} BAND'] = band
+    header[f'HIERARCH {HEADER_PREFIX} DEFRINGED'] = bool(fringe)
+
     flat_cube = construct_flat_cube(
         paths,
         lat_bin_size_factor=lat_bin_size_factor,
@@ -233,25 +255,10 @@ def do_tile(
         sigma_iterations=sigma_iterations,
         snr_threshold=snr_threshold,
         max_correction=max_correction,
+        header=header,
         desc=dataset,
         leave=False,
     )
-
-    header = fits.Header()
-    header[f'HIERARCH {HEADER_PREFIX} VERSION'] = (__version__, 'Software version')
-    header[f'HIERARCH {HEADER_PREFIX} DATE'] = datetime.datetime.now().isoformat()
-    header[f'HIERARCH {HEADER_PREFIX} LAT_BIN_SIZE_FACTOR'] = lat_bin_size_factor
-    header[f'HIERARCH {HEADER_PREFIX} BIN_ASPECT'] = bin_aspect
-    header[f'HIERARCH {HEADER_PREFIX} EMISSION_CUTOFF'] = emission_cutoff
-    header[f'HIERARCH {HEADER_PREFIX} ITERATIONS'] = iterations
-    header[f'HIERARCH {HEADER_PREFIX} NSIGMA'] = nsigma
-    header[f'HIERARCH {HEADER_PREFIX} SIGMA_ITERATIONS'] = sigma_iterations
-    header[f'HIERARCH {HEADER_PREFIX} SNR_THRESHOLD'] = snr_threshold
-    header[f'HIERARCH {HEADER_PREFIX} MAX_CORRECTION'] = max_correction
-    header[f'HIERARCH {HEADER_PREFIX} DATASET'] = dataset
-    header[f'HIERARCH {HEADER_PREFIX} CHANNEL'] = channel
-    header[f'HIERARCH {HEADER_PREFIX} BAND'] = band
-    header[f'HIERARCH {HEADER_PREFIX} DEFRINGED'] = bool(fringe)
 
     hdul = make_hdul(flat_cube, header)
 

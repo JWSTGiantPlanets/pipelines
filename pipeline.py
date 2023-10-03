@@ -696,11 +696,14 @@ class Pipeline:
         for root_path in self.iterate_group_root_paths():
             paths_list: list[tuple[str, str]] = []
             variants_done = set()
-            for variant in self.data_variant_combinations:
-                variant, paths_in = self.get_stage3_variant_paths_in(root_path, variant)
+            for full_variant in self.data_variant_combinations:
+                variant, paths_in = self.get_stage3_variant_paths_in(
+                    root_path, full_variant
+                )
                 # Skip if we have already done this variant. E.g. for MIRI, the PSF
-                # variants occur after stage3, so {'psf'} and {'psf', 'bg'} are
-                # equivalent.
+                # variants occur after stage3, so fulll_variant={'bg'} and
+                # full_variant={'psf', 'bg'} are equivalent, so both will have
+                # variant={'bg'}.
                 if variant in variants_done:
                     continue
                 variants_done.add(variant)
@@ -763,6 +766,11 @@ class Pipeline:
     ) -> tuple[frozenset[str], list[str]]:
         """
         Get list of input paths for a given variant for stage3.
+
+        The returned variant may be a subset of the input variant if the variant
+        contains a component produced after stage3. E.g. for MIRI, the PSF variants
+        occur after stage3, so {'bg'} and {'bg', 'psf'} are equivalent when used as
+        input to stage3.
         """
         dir_in, dir_out = self.step_directories['stage3']
         if variant == frozenset():
@@ -777,10 +785,12 @@ class Pipeline:
         self, paths_in: list[str]
     ) -> dict[tuple[int | None, str, tuple[str | None, ...]], list[str]]:
         out: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]] = {}
+        dither_options = set()
         for p_in in paths_in:
             with fits.open(p_in) as hdul:
                 hdr = hdul[0].header  #  type: ignore
             dither = int(hdr['PATT_NUM'])
+            dither_options.add(dither)
             tile = hdr['ACT_ID']
             match_key = self.get_file_match_key_for_stage3(hdr)
 
@@ -790,6 +800,14 @@ class Pipeline:
                 (None, tile, match_key),
             ]:
                 out.setdefault(k, []).append(p_in)
+
+        if len(dither_options) == 1:
+            # If there is only a single dither, we can skip dither combination
+            out = {
+                (dither, tile, match_key): paths_in
+                for (dither, tile, match_key), paths_in in out.items()
+                if dither is not None
+            }
         return out
 
     def get_file_match_key_for_stage3(
@@ -993,12 +1011,14 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--groups_to_use',
+        '--groups-to-use',
         type=str,
         help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will
             keep the first four groups. If unspecified, all groups will be kept.""",
     )
     parser.add_argument(
         '--background_subtract',
+        '--background-subtract',
         action=argparse.BooleanOptionalAction,
         default='both',
         help="""Toggle background subtractio of the data. If unspecified, then versions
@@ -1007,6 +1027,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--background_path',
+        '--background-path',
         type=str,
         help="""Path to directory containing background data. For example, if
             your `root_path` is `/data/uranus/lon1`, the `background_path` may
@@ -1017,6 +1038,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--basic_navigation',
+        '--basic-navigation',
         action='store_true',
         help="""Use basic navigation, and only save RA and Dec backplanes (e.g. useful
             for small bodies). By default, full navigation is performed, generating a
@@ -1026,6 +1048,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--step_kwargs',
+        '--step-kwargs',
         '--kwargs',
         type=str,
         help="""JSON string containing keyword arguments to pass to individual pipeline
@@ -1036,6 +1059,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--skip_steps',
+        '--skip-steps',
         nargs='+',
         type=str,
         help="""List of steps to skip. This is generally only useful if you are
@@ -1044,12 +1068,14 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         '--start_step',
+        '--start-step',
         type=str,
         help="""Convenience argument to add all steps before `start_step` to 
             `skip_steps`.""",
     )
     parser.add_argument(
         '--end_step',
+        '--end-step',
         type=str,
         help="""Convenience argument to add all steps steps after `end_step` to 
             `skip_steps`.""",
