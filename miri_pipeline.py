@@ -165,6 +165,7 @@ STEP_DESCRIPTIONS = """
 - `defringe`: Run the JWST reduction pipeline residual fringe step [optional].
 - `stage3`: Run the standard JWST reduction pipeline stage 3.
 - `navigate`: Navigate reduced files.
+- `psf`: Correct PSF effects using a forward model convolved with telescope's PSF.
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
 - `flat`: Correct flat effects using synthetic flat field cubes.
 - `despike`: Clean cubes by removing extreme outlier pixels.
