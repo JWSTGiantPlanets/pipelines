@@ -125,7 +125,8 @@ To use this script you will need to:
     #SBATCH --ntasks=8
     #SBATCH --export=NONE
     #SBATCH --account=nemesis
-    
+    #SBATCH --output=slurm-%j-%x.out
+
     source ~/.bashrc
     conda activate py311
 
