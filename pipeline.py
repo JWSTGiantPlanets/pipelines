@@ -1050,6 +1050,7 @@ def get_pipeline_argument_parser(
         '--step_kwargs',
         '--step-kwargs',
         '--kwargs',
+        '--kw',
         type=str,
         help="""JSON string containing keyword arguments to pass to individual pipeline
             steps. For example, 
