@@ -66,10 +66,11 @@ download_urls('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites
 The [`miri_pipeline.py`](https://github.com/ortk95/jwst-pipelines/blob/main/miri_pipeline.py) script is used to reduce and process MIRI MRS observations of solar system targets. The full custom pipeline includes:
 1. The [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) is used to reduce `stage0` uncalibrated data into `stage3` calibrated data cubes. Reduced cubes are produced for each individual dither, and with dithers combined. Background subtraction and residual fringe correction can also be applied to the data in this step.
 2. Each reduced cube is navigated, and backplanes are created to provide useful coordinates (e.g. latitude, longitude, emission angle, RA, Dec etc.) for each pixel.
-3. Saturated parts of the cubes are identified and desaturated where possible using data reduced using fewer groups.
-4. Flat field effects (e.g. striping and swirling patterns) in the data can be corrected using synthetic flat fields generated from dithered observations. To use these, see the [flat field](#miri-flat-fields) section below.
-5. Extreme outlier pixels are identified and flagged and removed from the data. Note that for small objects or point source observations, this `despike` step may be overaggressive and remove real data.
-6. Quick look [plots and animations](#examples) are generated for each cube.
+3. Darkening caused by the telescope's PSF is approximately corrected by convolving a forward model of the observation with a Gaussian PSF.
+4. Saturated parts of the cubes are identified and desaturated where possible using data reduced using fewer groups.
+5. Flat field effects (e.g. striping and swirling patterns) in the data can be corrected using synthetic flat fields generated from dithered observations. To use these, see the [flat field](#miri-flat-fields) section below.
+6. Extreme outlier pixels are identified and flagged and removed from the data. Note that for small objects or point source observations, this `despike` step may be overaggressive and remove real data.
+7. Quick look [plots and animations](#examples) are generated for each cube.
 
 This pipeline is described in Fletcher et al. (2023).
 
