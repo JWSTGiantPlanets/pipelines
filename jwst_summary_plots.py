@@ -344,6 +344,12 @@ def make_summary_plot(
     ax.set_ylim(*ax.get_ylim())
     ax.fill_between(wl, sp_saturated, color=SATURATION_COLOR, linewidth=0, alpha=0.1)
     ax.set_ylim(top=data.shape[1] * data.shape[2])
+    if len({s for s in sp_saturated if not np.isnan(s)}) == 1:
+        # When all sp_saturated are equal, plot often ends up as red line right through
+        # the middle of the axis, which looks bad and isn't really useful. So set the
+        # y-axis limits to be a bit more useful and avoid this by pushing the red line
+        # to the bottom of the plot.
+        ax.set_ylim(bottom=max(0, np.nanmin(sp_saturated) - 1))
     ax.set_ylabel('Invalid or fully saturated pixels')
     ax.spines['right'].set_color(SATURATION_COLOR)
     ax.yaxis.label.set_color(SATURATION_COLOR)
