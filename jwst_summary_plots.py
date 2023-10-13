@@ -360,6 +360,7 @@ def make_summary_plot(
             img_data = np.nanmedian(img_data, axis=0)
         else:
             img_data = np.nansum(img_data, axis=0)
+        img_data[img_data == 0] = np.nan
         img_sat = np.nanmean(
             data[np.logical_and(wl >= wl0, wl < wl1)] == 0, axis=0
         ) + np.nanmean(np.isnan(data[np.logical_and(wl >= wl0, wl < wl1)]), axis=0)
