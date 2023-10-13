@@ -929,6 +929,10 @@ class Pipeline:
 
     # animate
     def run_animate(self, kwargs: dict[str, Any]) -> None:
+        if self.parallel_kwargs.get('parallel_frac', False):
+            # don't want progress bars to be printed when running in parallel
+            kwargs.setdefault('progress_bar', False)
+
         _, dir_out = self.step_directories['animate']
         paths_dict: dict[str, list[str]] = {}
         for stage_dir in self.stage_directories_to_plot:
