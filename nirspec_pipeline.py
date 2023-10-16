@@ -148,7 +148,7 @@ To use this script you will need to:
     chmod -R --quiet ugo+rw $CRDS_PATH
 
     # Exit script with the same exit code as the pipeline
-    exit $exit_code 
+    exit $exit_code
 """
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
