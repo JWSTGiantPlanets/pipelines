@@ -66,6 +66,20 @@ STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
     'animate': ('', 'animation'),
 }
 
+DEFAULT_PARALLEL_KWARGS = dict(
+    timeout=2 * 60 * 60,  # avgerage of 2 hours/job
+)
+DEFAULT_REDUCTION_PARALLEL_KWARGS = dict(
+    timeout=5 * 60 * 60,  # average of 5 hours/job
+    start_delay=10,
+    parallel_job_kw=dict(
+        # wait times help with parallel handling of new CRDS cache files
+        caught_error_wait_time=15,
+        caught_error_wait_time_frac=1,
+        caught_error_wait_time_max=600,
+    ),
+)
+
 
 class Pipeline:
     """
@@ -135,21 +149,14 @@ class Pipeline:
         if isinstance(step_kwargs, str):
             step_kwargs = cast(dict[Step, dict[str, Any]], json.loads(step_kwargs))
 
-        parallel_kwargs = dict(
-            parallel_frac=parallel,
-            timeout=2 * 60 * 60,  # avgerage of 2 hours/job
-        ) | (parallel_kwargs or {})
+        parallel_kwargs = (
+            DEFAULT_PARALLEL_KWARGS
+            | dict(parallel_frac=parallel)
+            | (parallel_kwargs or {})
+        )
         reduction_parallel_kwargs = (
             parallel_kwargs
-            | dict(
-                timeout=5 * 60 * 60,  # average of 5 hours/job
-                start_delay=10,
-                parallel_job_kw=dict(
-                    caught_error_wait_time=15,
-                    caught_error_wait_time_frac=1,
-                    caught_error_wait_time_max=600,
-                ),
-            )
+            | DEFAULT_REDUCTION_PARALLEL_KWARGS
             | (reduction_parallel_kwargs or {})
         )
         self.parallel_kwargs = parallel_kwargs
