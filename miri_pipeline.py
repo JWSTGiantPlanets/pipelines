@@ -617,7 +617,7 @@ class MiriPipeline(Pipeline):
                 self.psf_fn,
                 args_list,
                 desc='psf',
-                **self.reduction_parallel_kwargs,
+                **self.parallel_kwargs,
             )
 
     def psf_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
