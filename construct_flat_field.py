@@ -1,4 +1,4 @@
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 import datetime
 import math
@@ -12,7 +12,7 @@ from astropy.io import fits
 import flat_field
 import tools
 
-VARIABLE_HEADER_KEYS = ['DATE', 'DATASET']
+VARIABLE_HEADER_KEYS = ('DATE', 'DATASET', 'LONLAT_COMPARISON_RADIUS')
 HEADER_PREFIX = flat_field.GENERATION_HEADER_PREFIX
 
 CorrespondingPixelKey: TypeAlias = tuple[int, tuple[int, int]]
