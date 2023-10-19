@@ -1,4 +1,4 @@
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 import datetime
 import math
@@ -12,7 +12,18 @@ from astropy.io import fits
 import flat_field
 import tools
 
-VARIABLE_HEADER_KEYS = ('DATE', 'DATASET', 'LONLAT_COMPARISON_RADIUS')
+VARIABLE_HEADER_KEYS = (
+    'DATE',
+    'DATASET',
+    'INPUT_OBS_ID',
+    'INPUT_TARGNAME',
+    'INPUT_OBSLABEL',
+    'INPUT_DATE',
+    'INPUT_CAL_VER',
+    'INPUT_CRDS_VER',
+    'INPUT_CRDS_CTX',
+    'LONLAT_COMPARISON_RADIUS',
+)
 HEADER_PREFIX = flat_field.GENERATION_HEADER_PREFIX
 
 CorrespondingPixelKey: TypeAlias = tuple[int, tuple[int, int]]
@@ -39,10 +50,20 @@ def construct_flat_cube(
     masks: list[np.ndarray] = []
     coord_images: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
     shape = None
+    header_metadata: dict[tuple[str, str], list[str]] = {
+        ('INPUT_OBS_ID', 'OBS_ID'): [],
+        ('INPUT_TARGNAME', 'TARGNAME'): [],
+        ('INPUT_DATE', 'DATE'): [],
+        ('INPUT_OBSLABEL', 'OBSLABEL'): [],
+        ('INPUT_CAL_VER', 'CAL_VER'): [],
+        ('INPUT_CRDS_VER', 'CRDS_VER'): [],
+        ('INPUT_CRDS_CTX', 'CRDS_CTX'): [],
+    }
     for p in paths:
         with fits.open(p) as hdul:
             cube = hdul['SCI'].data  # type: ignore
             error_cube = hdul['ERR'].data  # type: ignore
+            input_header = hdul['PRIMARY'].header  # type: ignore
             if shape is None:
                 shape = cube.shape
             assert cube.shape == shape, 'Cube shape mismatch'
@@ -61,6 +82,9 @@ def construct_flat_cube(
             cube[cube == 0] = np.nan
             error_cube[np.isnan(cube)] = np.nan
             mask = emission_img < emission_cutoff
+
+            for (k_out, k_in), v in header_metadata.items():
+                v.append(str(input_header[k_in]))
 
             error_cubes.append(error_cube)
             cubes.append(cube)
@@ -100,6 +124,8 @@ def construct_flat_cube(
             flat_cube[idx] = flat_img
 
     if header is not None:
+        for (k_out, k_in), v in header_metadata.items():
+            header[f'HIERARCH {HEADER_PREFIX} {k_out}'] = merge_header_strings(v)
         header[f'HIERARCH {HEADER_PREFIX} LAT_BIN_SIZE_FACTOR'] = lat_bin_size_factor
         header[f'HIERARCH {HEADER_PREFIX} BIN_ASPECT'] = bin_aspect
         header[f'HIERARCH {HEADER_PREFIX} EMISSION_CUTOFF'] = emission_cutoff
@@ -113,6 +139,22 @@ def construct_flat_cube(
         ] = lonlat_comparison_radius
 
     return flat_cube
+
+
+def merge_header_strings(strings: list[str], *, fill_char: str = '?') -> str:
+    # merge strings with fill_char in place of differing characters
+    # e.g. ['01247667001', '01247667002'] -> '0124766700?'
+    # e.g. ['Saturn-15N', 'Saturn-45N', 'Saturn-75N'] -> 'Saturn-?5N'
+
+    split_strings = [list(s) for s in strings]
+    output = ['' for _ in range(max(len(s) for s in split_strings))]
+    for idx in range(len(output)):
+        chars = {s[idx] if idx < len(s) else fill_char for s in split_strings}
+        if len(chars) == 1:
+            output[idx] = chars.pop()
+        else:
+            output[idx] = fill_char
+    return ''.join(output)
 
 
 def calculate_corresponding_pixels(
