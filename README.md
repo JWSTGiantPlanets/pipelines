@@ -1,9 +1,37 @@
 # JWST custom reduction pipelines
-**[Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSpec Pipeline](#nirspec-pipeline) | [Support](#support) | [References](#references) | [Examples](#examples)**
+**[Reference](#reference) | [Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSpec Pipeline](#nirspec-pipeline) | [Support](#support) | [Examples](#examples)**
 
 Custom JWST data reduction and visualisation code used to call and extend the [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) to process, reduce and analyse NIRSpec and MIRI data for solar system observations.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891559.svg)](https://doi.org/10.5281/zenodo.7891559) [![Checks](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml)
+
+## Reference
+> King et al., (2023). Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for Solar System Targets. Research Notes of the AAS, 7(10), 223, https://doi.org/10.3847/2515-5172/ad045f
+
+<details>
+<summary>BibTeX entry</summary>
+
+```bibtex
+@article{king_2023_pipelines,
+  doi       = {10.3847/2515-5172/ad045f},
+  url       = {https://dx.doi.org/10.3847/2515-5172/ad045f},
+  year      = {2023},
+  month     = {oct},
+  publisher = {The American Astronomical Society},
+  volume    = {7},
+  number    = {10},
+  pages     = {223},
+  author    = {Oliver R. T. King and Leigh N. Fletcher and Jake Harkett and Michael T. Roman and Henrik Melin},
+  title     = {Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for Solar System Targets},
+  journal   = {Research Notes of the AAS},
+  abstract  = {We present custom JWST data reduction pipelines for JWST NIRSpec/IFU and MIRI/MRS observations of solar system objects. The pipelines simplify the process of reducing the JWST observations, and include custom steps to significantly improve the data quality. Our custom processing routines include a “desaturation” routine to reduce the effect of saturation while still maintaining high signal-to-noise ratio, and custom flat field correction code to remove the significant artifacts found in MIRI/MRS observations. The pipelines also automatically generate a series of quick look plots and animations to simplify exploration of a dataset. These custom JWST pipelines can be downloaded from https://github.com/JWSTGiantPlanets/pipelines.}
+}
+```
+
+</details>
+
+Each release is also archived on Zenodo at https://doi.org/10.5281/zenodo.7891559.
+
 
 ## Setup
 Requirements:
@@ -139,9 +167,6 @@ If you are getting errors such as `FileNotFoundError: [Errno 2] No such file or 
 conda install -c conda-forge ffmpeg
 ```
 
-
-## References
-Fletcher, L. N., King, O. R. T., Harkett, J., Hammel, H. B., Roman, M. T., Melin, H., et al. (2023). Saturn's atmosphere in northern summer revealed by JWST/MIRI. _Journal of Geophysical Research: Planets_, 128, e2023JE007924. https://doi.org/10.1029/2023JE007924
 
 ## Examples
 
