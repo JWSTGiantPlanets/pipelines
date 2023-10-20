@@ -1,7 +1,15 @@
 """
 Common JWST pipeline code used by the MIRI and NIRSpec pipelines.
 
+See miri_pipeline.py and nirspec_pipeline.py for the instrument specific code.
+
 GitHub repository: https://github.com/JWSTGiantPlanets/pipelines
+
+Reference
+=========
+King et al., (2023). Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for
+Solar System Targets. Research Notes of the AAS, 7(10), 223,
+https://doi.org/10.3847/2515-5172/ad045f
 """
 import argparse
 import datetime
@@ -65,6 +73,20 @@ STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
     'plot': ('', 'plots'),
     'animate': ('', 'animation'),
 }
+
+DEFAULT_PARALLEL_KWARGS = dict(
+    timeout=2 * 60 * 60,  # avgerage of 2 hours/job
+)
+DEFAULT_REDUCTION_PARALLEL_KWARGS = dict(
+    timeout=5 * 60 * 60,  # average of 5 hours/job
+    start_delay=10,
+    parallel_job_kw=dict(
+        # wait times help with parallel handling of new CRDS cache files
+        caught_error_wait_time=15,
+        caught_error_wait_time_frac=1,
+        caught_error_wait_time_max=600,
+    ),
+)
 
 
 class Pipeline:
@@ -135,21 +157,14 @@ class Pipeline:
         if isinstance(step_kwargs, str):
             step_kwargs = cast(dict[Step, dict[str, Any]], json.loads(step_kwargs))
 
-        parallel_kwargs = dict(
-            parallel_frac=parallel,
-            timeout=2 * 60 * 60,  # avgerage of 2 hours/job
-        ) | (parallel_kwargs or {})
+        parallel_kwargs = (
+            DEFAULT_PARALLEL_KWARGS
+            | dict(parallel_frac=parallel)
+            | (parallel_kwargs or {})
+        )
         reduction_parallel_kwargs = (
             parallel_kwargs
-            | dict(
-                timeout=5 * 60 * 60,  # average of 5 hours/job
-                start_delay=10,
-                parallel_job_kw=dict(
-                    caught_error_wait_time=15,
-                    caught_error_wait_time_frac=1,
-                    caught_error_wait_time_max=600,
-                ),
-            )
+            | DEFAULT_REDUCTION_PARALLEL_KWARGS
             | (reduction_parallel_kwargs or {})
         )
         self.parallel_kwargs = parallel_kwargs

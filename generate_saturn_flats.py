@@ -21,7 +21,7 @@ PATTERN_IN = os.path.join(
     ROOT_PATH,
     '{dataset}',
     'stage3_desaturated',
-    'd{dither}{fringe}_nav',
+    'd{dither}_bg{fringe}',
     'Level3_ch{channel_number}-{channel_band}_s3d_nav.fits',
 )
 PATTERN_OUT = os.path.join(

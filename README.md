@@ -1,9 +1,37 @@
 # JWST custom reduction pipelines
-**[Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSpec Pipeline](#nirspec-pipeline) | [Support](#support) | [References](#references) | [Examples](#examples)**
+**[Reference](#reference) | [Setup](#setup) | [MIRI Pipeline](#miri-mrs-pipeline) | [NIRSpec Pipeline](#nirspec-pipeline) | [Support](#support) | [Examples](#examples)**
 
 Custom JWST data reduction and visualisation code used to call and extend the [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) to process, reduce and analyse NIRSpec and MIRI data for solar system observations.
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891559.svg)](https://doi.org/10.5281/zenodo.7891559) [![Checks](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml)
+[![Citation](https://img.shields.io/badge/Citation-10.3847%2F2515--5172%2Fad045f-FAB70C%3Flogo%3Ddoi?logo=doi&label=Citation&color=%23FAB70C)](https://doi.org/10.3847/2515-5172/ad045f) [![Zenodo DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891559.svg)](https://doi.org/10.5281/zenodo.7891559) [![Checks](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml)
+
+## Reference
+> King et al., (2023). Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for Solar System Targets. Research Notes of the AAS, 7(10), 223, https://doi.org/10.3847/2515-5172/ad045f
+
+<details>
+<summary>BibTeX entry</summary>
+
+```bibtex
+@article{king_2023_pipelines,
+  doi       = {10.3847/2515-5172/ad045f},
+  url       = {https://dx.doi.org/10.3847/2515-5172/ad045f},
+  year      = {2023},
+  month     = {oct},
+  publisher = {The American Astronomical Society},
+  volume    = {7},
+  number    = {10},
+  pages     = {223},
+  author    = {Oliver R. T. King and Leigh N. Fletcher and Jake Harkett and Michael T. Roman and Henrik Melin},
+  title     = {Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for Solar System Targets},
+  journal   = {Research Notes of the AAS},
+  abstract  = {We present custom JWST data reduction pipelines for JWST NIRSpec/IFU and MIRI/MRS observations of solar system objects. The pipelines simplify the process of reducing the JWST observations, and include custom steps to significantly improve the data quality. Our custom processing routines include a “desaturation” routine to reduce the effect of saturation while still maintaining high signal-to-noise ratio, and custom flat field correction code to remove the significant artifacts found in MIRI/MRS observations. The pipelines also automatically generate a series of quick look plots and animations to simplify exploration of a dataset. These custom JWST pipelines can be downloaded from https://github.com/JWSTGiantPlanets/pipelines.}
+}
+```
+
+</details>
+
+Each release is also archived on Zenodo at https://doi.org/10.5281/zenodo.7891559.
+
 
 ## Setup
 Requirements:
@@ -140,21 +168,19 @@ conda install -c conda-forge ffmpeg
 ```
 
 
-## References
-Fletcher, L. N., King, O. R. T., Harkett, J., Hammel, H. B., Roman, M. T., Melin, H., et al. (2023). Saturn's atmosphere in northern summer revealed by JWST/MIRI. _Journal of Geophysical Research: Planets_, 128, e2023JE007924. https://doi.org/10.1029/2023JE007924
-
 ## Examples
 
 ![MIRI pipeline summary figure](images/pipeline_summary.png)
-Figure from Fletcher et al. (2023) showing the custom MIRI pipeline applied to Saturn observations. The first column shows the output of the standard JWST pipeline, which still contains significant flat field effects (a & d), saturation (g), and partial saturation (dark pixels in g & j). The second column shows the data after the desaturation step is applied, and the third column shows the data after the flat field correction is applied.
+Figure from [King et al. (2023)](https://doi.org/10.3847/2515-5172/ad045f) showing example cube slices of JWST/MIRI observations of Saturn ([Fletcher et al. 2023](https://doi.org/10.1029/2023JE007924)) at different stages of our custom data reduction process. The first column shows the output of the standard JWST pipeline, which contains saturation (missing data around Saturn's North Pole in panel i), partial saturation (dark pixels on Saturn in i), significant flat fields effects (a and g), and limb darkening caused by the instrument PSF (m). The second column shows the data after the application of the desaturation step, the third column shows the data after flat field correction, and the fourth column shows the "final" version of the data after PSF correction. The application of the custom data reduction steps significantly improves the data quality, such as revealing banded structure of Saturn's atmosphere (panels d and h) that is impossible to see in the standard pipeline output.
+
 
 <br>  
 
 ![Example quick look plot](images/quick_look_plot_example.png)
-Example quick look plot generated by [`jwst_summary_plots.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/jwst_summary_plots.py) showing a Saturn cube from Fletcher et al. (2023). Plots like this are generated for every cube when the pipeline is run with the default settings.
+Example quick look plot generated by [`jwst_summary_plots.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/jwst_summary_plots.py) showing a Saturn cube from [Fletcher et al. (2023)](https://doi.org/10.1029/2023JE007924). Plots like this are generated for every cube when the pipeline is run with the default settings.
 
 <br>  
 
 https://user-images.githubusercontent.com/26504228/236156356-247307bc-7d6c-44e3-8400-ddee76171df7.mp4
 
-Example quick look animation generated by [`jwst_summary_animation.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/jwst_summary_animation.py) showing a set of dithered Saturn cubes from Fletcher et al. (2023). Animations like this are automatically generated for every set of dithered cubes when the pipeline is run with the default settings.
+Example quick look animation generated by [`jwst_summary_animation.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/jwst_summary_animation.py) showing a set of dithered Saturn cubes from [Fletcher et al. (2023)](https://doi.org/10.1029/2023JE007924). Animations like this are automatically generated for every set of dithered cubes when the pipeline is run with the default settings.

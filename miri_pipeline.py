@@ -10,6 +10,13 @@ See STEP_DESCRIPTIONS below for a description of each step in this pipeline.
 GitHub repository: https://github.com/JWSTGiantPlanets/pipelines
 
 
+Reference
+=========
+King et al., (2023). Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for
+Solar System Targets. Research Notes of the AAS, 7(10), 223,
+https://doi.org/10.3847/2515-5172/ad045f
+
+
 Setup
 =====
 If you are running a reduction on Leicester's ALICE HPC then the pipeline should work 
@@ -156,7 +163,7 @@ To use this script you will need to:
     chmod -R --quiet ugo+rw $CRDS_PATH
 
     # Exit script with the same exit code as the pipeline
-    exit $exit_code 
+    exit $exit_code
 """
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
@@ -617,7 +624,7 @@ class MiriPipeline(Pipeline):
                 self.psf_fn,
                 args_list,
                 desc='psf',
-                **self.reduction_parallel_kwargs,
+                **self.parallel_kwargs,
             )
 
     def psf_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
