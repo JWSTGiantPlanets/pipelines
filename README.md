@@ -3,7 +3,7 @@
 
 Custom JWST data reduction and visualisation code used to call and extend the [standard JWST reduction pipeline](https://github.com/spacetelescope/jwst/) to process, reduce and analyse NIRSpec and MIRI data for solar system observations.
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891559.svg)](https://doi.org/10.5281/zenodo.7891559) [![Checks](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml)
+[![Citation](https://img.shields.io/badge/Citation-10.3847%2F2515--5172%2Fad045f-FAB70C%3Flogo%3Ddoi?logo=doi&label=Citation&color=%23FAB70C)](https://doi.org/10.3847/2515-5172/ad045f) [![Zenodo DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7891559.svg)](https://doi.org/10.5281/zenodo.7891559) [![Checks](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml/badge.svg)](https://github.com/JWSTGiantPlanets/pipelines/actions/workflows/checks.yml)
 
 ## Reference
 > King et al., (2023). Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for Solar System Targets. Research Notes of the AAS, 7(10), 223, https://doi.org/10.3847/2515-5172/ad045f
