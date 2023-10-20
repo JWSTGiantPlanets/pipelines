@@ -1,7 +1,15 @@
 """
 Common JWST pipeline code used by the MIRI and NIRSpec pipelines.
 
+See miri_pipeline.py and nirspec_pipeline.py for the instrument specific code.
+
 GitHub repository: https://github.com/JWSTGiantPlanets/pipelines
+
+Reference
+=========
+King et al., (2023). Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelines for
+Solar System Targets. Research Notes of the AAS, 7(10), 223,
+https://doi.org/10.3847/2515-5172/ad045f
 """
 import argparse
 import datetime
