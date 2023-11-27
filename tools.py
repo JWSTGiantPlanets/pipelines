@@ -589,3 +589,20 @@ def make_rgb_images(
         image_data = np.clip(image_data, 0, 1)
         out.append(np.moveaxis(image_data, 0, -1))
     return out
+
+
+def merge_nested_dicts(*dicts: dict) -> dict:
+    """
+    Merge nested dictionaries.
+
+    Args:
+        dicts: Dictionaries to merge.
+    """
+    result = {}
+    for d in dicts:
+        for key, value in d.items():
+            if isinstance(value, dict):
+                result[key] = merge_nested_dicts(result.get(key, {}), value)
+            else:
+                result[key] = value
+    return result

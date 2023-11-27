@@ -395,7 +395,8 @@ def run_pipeline(
             arguments. For example,
             `step_kwargs={'stage3':{'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}}}`
             can will customise the `stage3` step. See the DEFAULT_KWARGS constant above
-            for the default values.
+            for the default values. The provided kwargs will be merged with the default
+            kwargs.
         parallel_kwargs: Dictionary of keyword arguments to customise parallel
             processing.
         reduction_parallel_kwargs: Dictionary of keyword arguments to customise parallel
