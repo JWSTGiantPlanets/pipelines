@@ -42,7 +42,7 @@ import jwst_summary_plots
 import navigate_jwst_observations
 import remove_groups
 from parallel_tools import runmany
-from tools import check_path
+from tools import check_path, merge_nested_dicts
 
 Step: TypeAlias = Literal[
     'remove_groups',
@@ -128,7 +128,8 @@ class Pipeline:
             step. See the documentation for each step for the available keyword
             arguments. For example,
             `step_kwargs={'stage3':{'outlier_detection': {'snr': '30.0 24.0', 'scale': '1.3 0.7'}}}`
-            can will customise the `stage3` step.
+            can will customise the `stage3` step. The provided kwargs will be merged
+            with any default kwargs.
         parallel_kwargs: Dictionary of keyword arguments to customise parallel
             processing.
         reduction_parallel_kwargs: Dictionary of keyword arguments to customise parallel
@@ -256,7 +257,10 @@ class Pipeline:
         """Run individual pipeline step."""
         print()
         self.log(f'Running {step} step')
-        kwargs = self.default_kwargs.get(step, {}) | self.step_kwargs.get(step, {})
+        kwargs = merge_nested_dicts(
+            self.default_kwargs.get(step, {}),
+            self.step_kwargs.get(step, {}),
+        )
         if kwargs:
             self.log(f'Arguments: {kwargs!r}', time=False)
         getattr(self, f'run_{step}')(kwargs)
@@ -1074,7 +1078,8 @@ def get_pipeline_argument_parser(
         help="""JSON string containing keyword arguments to pass to individual pipeline
             steps. For example, 
             `--kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'` 
-            will pass the custom arguments to the stage3 and plot steps.
+            will pass the custom arguments to the stage3 and plot steps. This will be
+            merged with the default kwargs for each step.
             """,
     )
     parser.add_argument(
