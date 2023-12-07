@@ -239,6 +239,7 @@ class Pipeline:
             end_step: Convenience argument to add all steps after `end_step` to
                 `skip_steps`.
         """
+        start_dtm = datetime.datetime.now()
         skip_steps = self.process_skip_steps(skip_steps, start_step, end_step)
         self.log(f'Running {self.get_instrument()} pipeline')
         self.print_reduction_info(skip_steps)
@@ -251,7 +252,8 @@ class Pipeline:
         print()
         self.log(f'{self.get_instrument()} pipeline completed with')
         self.print_reduction_info(skip_steps)
-        self.log('ALL DONE')
+        end_dtm = datetime.datetime.now()
+        self.log(f'All done in {end_dtm - start_dtm}')
 
     def run_step(self, step: Step) -> None:
         """Run individual pipeline step."""
