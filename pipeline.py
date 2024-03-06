@@ -56,7 +56,7 @@ Step: TypeAlias = Literal[
     'despike',
     'plot',
     'animate',
-    'defringe_1d', # MIRI only
+    'defringe_1d',  # MIRI only
     'psf',  # MIRI only
     'flat',  # MIRI only
     'defringe',  # MIRI only

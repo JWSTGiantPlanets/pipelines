@@ -92,6 +92,7 @@ def defringe_file(
             wavelengths=wavelengths,
             cube=cube,
             channel=channel,
+            print_info=print_info,
         )
         hdul['SCI'].data = cube_corrected  # type: ignore
 
@@ -100,27 +101,26 @@ def defringe_file(
         corrected_hdr.add_comment('True values were corrected, False values were not')
         hdul.append(
             fits.ImageHDU(
-                data=corrected_spaxels,
+                data=corrected_spaxels.astype(int),
                 header=corrected_hdr,
-                name='1DFRINGE_CORRECTED',
+                name='FRINGE1D_CORRECTED',
             )
         )
 
-        tools.add_header_reduction_note(hdul, '1D defringed')
-        header['HIERARCH 1DFRINGE VERSION'] = (__version__, 'Software version')
-        header['HIERARCH 1DFRINGE CHANNEL'] = (channel, 'Channel number')
+        tools.add_header_reduction_note(hdul, 'Residual fringe corrected (1D)')
+        header['HIERARCH FRINGE1D VERSION'] = (__version__, 'Software version')
+        header['HIERARCH FRINGE1D CHANNEL'] = (channel, 'Channel number')
 
         tools.check_path(output_path)
         hdul.writeto(output_path, overwrite=True)
-
-    if print_info:
-        print('  Done')
 
 
 def defringe_cube(
     wavelengths: np.ndarray,
     cube: np.ndarray,
     channel: int,
+    *,
+    print_info: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Apply JWST pipeline 1D defringing to each spaxel of a 3D cube independently.
@@ -133,6 +133,7 @@ def defringe_cube(
         wavelengths: Wavelengths.
         cube: Data cube.
         channel: MIRI channel number.
+        print_info: If True, print logging information.
 
     Returns:
         `(output_cube, corrected_spaxels)` tuple, where `output_cube` is the defringed
@@ -141,25 +142,61 @@ def defringe_cube(
     """
     output = cube.copy()
     corrected_spaxels = np.zeros(cube.shape[1:], dtype=bool)
-    for i1 in range(cube.shape[1]):
-        for i2 in range(cube.shape[2]):
-            spectrum = cube[:, i1, i2]
-            mask = np.isfinite(spectrum)
-            try:
-                output[mask, i1, i2] = fit_residual_fringes_1d(
-                    flux=spectrum[mask],
-                    wavelengths=wavelengths[mask],
-                    channel=channel,
-                )
-                corrected_spaxels[i1, i2] = True
-            except np.linalg.LinAlgError:
-                pass
+
+    indices = np.ndindex(cube.shape[1:])
+    if print_info:
+        indices = tqdm.tqdm(list(indices), desc='Defringing')
+
+    for i1, i2 in indices:
+        output[:, i1, i2], corrected_spaxels[i1, i2] = defringe_spectrum(
+            wavelengths=wavelengths,
+            spectrum=cube[:, i1, i2],
+            channel=channel,
+        )
     return output, corrected_spaxels
+
+
+def defringe_spectrum(
+    *,
+    wavelengths: np.ndarray,
+    spectrum: np.ndarray,
+    channel: int,
+) -> tuple[np.ndarray, bool]:
+    """
+    Apply JWST pipeline 1D defringing to a 1D spectrum. This is a wrapper around the
+    pipeline's `fit_residual_fringes_1d` function, with some extra checks and handling
+    of errors.
+
+    Args:
+        wavelengths: Wavelengths.
+        spectrum: 1D spectrum.
+        channel: MIRI channel number.
+
+    Returns:
+        `(output_spectrum, was_defringed)` tuple, where `output_spectrum` is the
+        defringed spectrum and `was_defringed` is a boolean indicating whether the
+        spectrum was defringed (True) or not (False).
+    """
+    output = spectrum.copy()
+    was_defringed = False
+    mask = np.isfinite(spectrum)
+    if any(mask):
+        try:
+            output[mask] = fit_residual_fringes_1d(
+                flux=spectrum[mask],
+                wavelength=wavelengths[mask],
+                channel=channel,
+            )
+            was_defringed = True
+        except (np.linalg.LinAlgError, ValueError):
+            pass
+    return output, was_defringed
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         argument_default=argparse.SUPPRESS,
     )
     parser.add_argument(
@@ -167,12 +204,13 @@ def main():
         nargs='+',
         help='Paths to the input FITS files.',
     )
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         '--directory-out',
         '-d',
         help='Path to the output directory. Cannot be used in combination with output-path.',
     )
-    parser.add_argument(
+    group.add_argument(
         '--output-path',
         '-o',
         help='Path to the output FITS file. Can only be used with a single input file.',
@@ -192,8 +230,6 @@ def main():
     )
     args = parser.parse_args()
     if 'output_path' in args:
-        if 'directory_out' in args:
-            parser.error('Cannot use both output-path and directory-out')
         if len(args.input_paths) > 1:
             parser.error('Cannot use output-path with multiple input files')
         defringe_file(

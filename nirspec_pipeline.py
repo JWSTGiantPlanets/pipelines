@@ -247,7 +247,7 @@ def run_pipeline(
     start_step: Step | None = None,
     end_step: Step | None = None,
     parallel: float | bool = False,
-    desaturate: bool = True,
+    desaturate: bool = False,
     groups_to_use: list[int] | None = None,
     background_subtract: BoolOrBoth = 'both',
     background_path: str | None = None,
