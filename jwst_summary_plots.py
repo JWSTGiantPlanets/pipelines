@@ -144,7 +144,7 @@ def make_summary_plot(
         if primary_header.get('S_BKDSUB') == 'COMPLETE':
             reduction_notes.append('Background subtracted')
         if primary_header.get('S_RESFRI') == 'COMPLETE':
-            reduction_notes.append('Residual fringe corrected')
+            reduction_notes.append('Residual fringe corrected (2D)')
         reduction_notes.extend(get_header_reduction_notes(hdul))
     instrument = primary_header['INSTRUME']
 
