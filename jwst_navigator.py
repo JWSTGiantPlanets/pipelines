@@ -1,6 +1,7 @@
 """
 Based on Henrik's JWSTSolarSystemPointing
 """
+
 # pylint: disable=attribute-defined-outside-init
 # pylint: disable=logging-not-lazy
 

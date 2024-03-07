@@ -1,6 +1,7 @@
 """
 Script to desaturate data. See desaturate_saturn.py for an example of using this.
 """
+
 __version__ = '1.0.0'
 
 import itertools
