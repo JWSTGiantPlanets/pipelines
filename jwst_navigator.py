@@ -1,6 +1,7 @@
 """
 Based on Henrik's JWSTSolarSystemPointing
 """
+
 __version__ = '1.0.0'
 
 # pylint: disable=attribute-defined-outside-init
