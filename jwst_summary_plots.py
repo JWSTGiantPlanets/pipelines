@@ -518,4 +518,4 @@ class ignore_warnings(warnings.catch_warnings):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:])  # pylint: disable=too-many-function-args
+    main(*sys.argv[1:])

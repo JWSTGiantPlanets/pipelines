@@ -43,7 +43,7 @@ def defringe_multiple(
     output_directory.mkdir(parents=True, exist_ok=True)
 
     if print_info:
-        iterator = tqdm.tqdm(input_paths, desc=f'Defringing files')
+        iterator = tqdm.tqdm(input_paths, desc='Defringing files')
     else:
         iterator = input_paths
 

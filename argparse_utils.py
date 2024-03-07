@@ -1,5 +1,6 @@
 import argparse
 import sys
+from typing import Sequence
 
 
 class UnderscoreArgumentParser(argparse.ArgumentParser):
@@ -10,7 +11,7 @@ class UnderscoreArgumentParser(argparse.ArgumentParser):
     For example the argument '--abc_def_ghi' would be processed as '--abc-def-ghi'.
     """
 
-    def parse_args(self, args=None, namespace=None):
+    def parse_args(self, args: Sequence[str] | None = None, namespace: None = None):
         """
         Parse args, replacing any underscores in the argument names with hyphens.
         """
@@ -33,10 +34,10 @@ class BooleanOrBothAction(argparse.Action):
         option_strings,
         dest,
         default=None,
-        type=None,
+        type=None,  #  pylint: disable=redefined-builtin
         choices=None,
         required=False,
-        help=None,
+        help=None,  #  pylint: disable=redefined-builtin
         metavar=None,
     ):
 
