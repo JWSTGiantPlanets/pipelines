@@ -134,9 +134,9 @@ def construct_flat_cube(
         header[f'HIERARCH {HEADER_PREFIX} SIGMA_ITERATIONS'] = sigma_iterations
         header[f'HIERARCH {HEADER_PREFIX} SNR_THRESHOLD'] = snr_threshold
         header[f'HIERARCH {HEADER_PREFIX} MAX_CORRECTION'] = max_correction
-        header[
-            f'HIERARCH {HEADER_PREFIX} LONLAT_COMPARISON_RADIUS'
-        ] = lonlat_comparison_radius
+        header[f'HIERARCH {HEADER_PREFIX} LONLAT_COMPARISON_RADIUS'] = (
+            lonlat_comparison_radius
+        )
 
     return flat_cube
 

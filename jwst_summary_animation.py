@@ -391,9 +391,11 @@ def make_animation(
             ax.set_yticks(yt)
             ax.set_yticklabels(
                 [
-                    ''
-                    if y % 90
-                    else f'{abs(y):.0f}°{"N" if y > 0 else ("S" if y < 0 else "")}'
+                    (
+                        ''
+                        if y % 90
+                        else f'{abs(y):.0f}°{"N" if y > 0 else ("S" if y < 0 else "")}'
+                    )
                     for y in yt
                 ],
                 size='x-small',

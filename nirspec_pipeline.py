@@ -181,20 +181,20 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --parallel
 # Run the full pipeline in parallel, using 50% of available cores
 python3 nirspec_pipeline.py /data/uranus/lon1 --parallel 0.5
 
-# Run the full pipeline, without any desaturation
-python3 nirspec_pipeline.py /data/uranus/lon1 --no-desaturate
+# Run the full pipeline, with desaturation
+python3 nirspec_pipeline.py /data/uranus/lon1 --desaturate
 
 # Run the pipeline, including background subtraction
-python3 nirspec_pipeline.py /data/uranus/lon1 --background_path /data/uranus/background
+python3 nirspec_pipeline.py /data/uranus/lon1 --background-path /data/uranus/background
 
 # Run the pipeline, but stop before creating any visualisations
-python3 nirspec_pipeline.py /data/uranus/lon1 --end_step despike
+python3 nirspec_pipeline.py /data/uranus/lon1 --end-step despike
 
 # Only run the plotting step
-python3 nirspec_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
+python3 nirspec_pipeline.py /data/uranus/lon1 --start-step plot --end-step plot
 
 # Re-run the pipeline, skipping the initial reduction steps
-python3 nirspec_pipeline.py /data/uranus/lon1 --start_step desaturate
+python3 nirspec_pipeline.py /data/uranus/lon1 --desaturate --start-step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
 python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
@@ -247,7 +247,7 @@ def run_pipeline(
     start_step: Step | None = None,
     end_step: Step | None = None,
     parallel: float | bool = False,
-    desaturate: bool = True,
+    desaturate: bool = False,
     groups_to_use: list[int] | None = None,
     background_subtract: BoolOrBoth = 'both',
     background_path: str | None = None,
