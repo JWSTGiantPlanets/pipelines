@@ -188,23 +188,23 @@ python3 miri_pipeline.py -h
 # Run the full pipeline, with all steps enabled
 python3 miri_pipeline.py /data/uranus/lon1
 
-# Run the full pipeline, without any desaturation
-python3 miri_pipeline.py /data/uranus/lon1 --no-desaturate
+# Run the full pipeline, with desaturation
+python3 miri_pipeline.py /data/uranus/lon1 --desaturate
 
 # Run the full pipeline, with only the defringed data
-python3 miri_pipeline.py /data/uranus/lon1 --defringe
+python3 miri_pipeline.py /data/uranus/lon1 --defringe_1d
 
 # Run the pipeline, including background subtraction
-python3 miri_pipeline.py /data/uranus/lon1 --background_path /data/uranus/background
+python3 miri_pipeline.py /data/uranus/lon1 --background-path /data/uranus/background
 
 # Run the pipeline, but stop before creating any visualisations
-python3 miri_pipeline.py /data/uranus/lon1 --end_step despike
+python3 miri_pipeline.py /data/uranus/lon1 --end-step despike
 
 # Only run the plotting step
-python3 miri_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
+python3 miri_pipeline.py /data/uranus/lon1 --start-step plot --end-step plot
 
 # Re-run the pipeline, skipping the initial reduction steps
-python3 miri_pipeline.py /data/uranus/lon1 --start_step desaturate
+python3 miri_pipeline.py /data/uranus/lon1 --desaturate --start-step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
 python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
@@ -749,7 +749,6 @@ class MiriPipeline(Pipeline):
 def main():
     parser = get_pipeline_argument_parser(MiriPipeline, STEP_DESCRIPTIONS, CLI_EXAMPLES)
     parser.add_argument(
-        '--defringe_1d',
         '--defringe-1d',
         action=argparse_utils.BooleanOrBothAction,
         help="""Toggle 1D defringing of the data. Note that this is generally
@@ -765,7 +764,6 @@ def main():
             default.""",
     )
     parser.add_argument(
-        '--flat_data_path',
         '--flat-data-path',
         type=str,
         help="""Optionally specify custom path to the flat field data. This path
@@ -774,7 +772,6 @@ def main():
             setting.""",
     )
     parser.add_argument(
-        '--correct_psf',
         '--correct-psf',
         action=argparse_utils.BooleanOrBothAction,
         help="""Toggle PSF correction of the data. This PSF correction is disabled by

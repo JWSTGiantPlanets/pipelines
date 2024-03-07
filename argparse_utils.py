@@ -1,4 +1,26 @@
 import argparse
+import sys
+
+
+class UnderscoreArgumentParser(argparse.ArgumentParser):
+    """
+    Subclass of ArgumentParser that accepts argument names containing underscores by
+    replacing them with hyphens.
+
+    For example the argument '--abc_def_ghi' would be processed as '--abc-def-ghi'.
+    """
+
+    def parse_args(self, args=None, namespace=None):
+        """
+        Parse args, replacing any underscores in the argument names with hyphens.
+        """
+        if args is None:
+            args = sys.argv[1:]
+        args = list(args)
+        for i, arg in enumerate(args):
+            if arg.startswith('--'):
+                args[i] = '--' + arg[2:].replace('_', '-')
+        return super().parse_args(args, namespace)
 
 
 class BooleanOrBothAction(argparse.Action):

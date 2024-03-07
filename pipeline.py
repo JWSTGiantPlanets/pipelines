@@ -995,7 +995,7 @@ def get_pipeline_argument_parser(
     """
     suffix = step_descriptions + '\n' + cli_examples
     name = pipeline_class.get_instrument()
-    parser = argparse.ArgumentParser(
+    parser = argparse_utils.UnderscoreArgumentParser(
         description=(
             f'Full JWST {name} IFU pipeline including the standard reduction from '
             'stage0 to stage3, and custom pipeline steps for additional cleaning and '
@@ -1014,7 +1014,7 @@ def get_pipeline_argument_parser(
         argument_default=argparse.SUPPRESS,
     )
     parser.add_argument(
-        'root_path',
+        'root-path',
         type=str,
         help="""Path to the directory containing the data. This directory should
             contain a subdirectory with the stage0 data (i.e. `root_path/stage0`).
@@ -1042,7 +1042,6 @@ def get_pipeline_argument_parser(
             """,
     )
     parser.add_argument(
-        '--groups_to_use',
         '--groups-to-use',
         type=str,
         help="""Comma-separated list of groups to keep when desaturating. For example, 
@@ -1050,7 +1049,6 @@ def get_pipeline_argument_parser(
             be kept.""",
     )
     parser.add_argument(
-        '--background_subtract',
         '--background-subtract',
         action=argparse_utils.BooleanOrBothAction,
         help="""Toggle background subtraction of the data. If --both-background-subtract
@@ -1060,18 +1058,16 @@ def get_pipeline_argument_parser(
         subtraction.""",
     )
     parser.add_argument(
-        '--background_path',
         '--background-path',
         type=str,
         help="""Path to directory containing background data. For example, if
             your `root_path` is `/data/uranus/lon1`, the `background_path` may
             be `/data/uranus/background`. Note that background subtraction will
             require the background data to be already reduced to `stage1`. If no 
-            `background_path` is specified (the default), then no background subtraction
+            `background-path` is specified (the default), then no background subtraction
             will be performed.""",
     )
     parser.add_argument(
-        '--basic_navigation',
         '--basic-navigation',
         action='store_true',
         help="""Use basic navigation, and only save RA and Dec backplanes (e.g. useful
@@ -1081,7 +1077,6 @@ def get_pipeline_argument_parser(
             is mainly useful if you get SPICE errors when navigating the data.""",
     )
     parser.add_argument(
-        '--step_kwargs',
         '--step-kwargs',
         '--kwargs',
         '--kw',
@@ -1093,23 +1088,20 @@ def get_pipeline_argument_parser(
             merged with the default kwargs for each step.""",
     )
     parser.add_argument(
-        '--skip_steps',
         '--skip-steps',
         nargs='+',
         type=str,
         help="""List of steps to skip. This is generally only useful if you are
             re-running part of the pipeline. Multiple steps can be passed as a
-            space-separated list. For example, `--skip_steps flat despike`.""",
+            space-separated list. For example, `--skip-steps flat despike`.""",
     )
     parser.add_argument(
-        '--start_step',
         '--start-step',
         type=str,
         help="""Convenience argument to add all steps before `start_step` to 
             `skip_steps`.""",
     )
     parser.add_argument(
-        '--end_step',
         '--end-step',
         type=str,
         help="""Convenience argument to add all steps steps after `end_step` to 
