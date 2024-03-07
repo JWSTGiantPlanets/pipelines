@@ -1015,6 +1015,7 @@ def get_pipeline_argument_parser(
     )
     parser.add_argument(
         'root-path',
+        dest='root_path',
         type=str,
         help="""Path to the directory containing the data. This directory should
             contain a subdirectory with the stage0 data (i.e. `root_path/stage0`).
