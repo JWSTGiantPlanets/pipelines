@@ -194,7 +194,7 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --end-step despike
 python3 nirspec_pipeline.py /data/uranus/lon1 --start-step plot --end-step plot
 
 # Re-run the pipeline, skipping the initial reduction steps
-python3 nirspec_pipeline.py /data/uranus/lon1 --start-step desaturate
+python3 nirspec_pipeline.py /data/uranus/lon1 --desaturate --start-step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
 python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'

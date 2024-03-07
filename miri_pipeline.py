@@ -173,7 +173,7 @@ STEP_DESCRIPTIONS = """
 - `stage3`: Run the standard JWST reduction pipeline stage 3.
 - `defringe_1d`: Run the JWST reduction pipeline 1D residual fringe step [optional].
 - `navigate`: Navigate reduced files.
-- `psf`: Correct PSF effects using a forward model convolved with telescope's PSF.
+- `psf`: Correct PSF effects using a forward model convolved with telescope's PSF [optional].
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
 - `flat`: Correct flat effects using synthetic flat field cubes.
 - `despike`: Clean cubes by removing extreme outlier pixels.
@@ -209,7 +209,6 @@ python3 miri_pipeline.py /data/uranus/lon1 --desaturate --start-step desaturate
 # Run the pipeline, passing custom arguments to different steps
 python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
 """
-import argparse
 import os
 import pathlib
 from typing import Any, Collection
