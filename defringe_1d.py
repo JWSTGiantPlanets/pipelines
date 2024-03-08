@@ -9,8 +9,9 @@ example usage:
     python3 defringe_1d.py data/input/*.fits -d data/output
     python3 defringe_1d.py data.fits -o data.fits --no-check-if-same-file
 """
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 import argparse
+from collections.abc import Collection
 from pathlib import Path
 
 import numpy as np
@@ -57,6 +58,7 @@ def defringe_file(
     input_path: str | Path,
     output_path: str | Path,
     *,
+    wavelength_ranges: Collection[tuple[float, float]] | None = None,
     check_if_same_file: bool = True,
     print_info: bool = False,
 ) -> None:
@@ -64,11 +66,14 @@ def defringe_file(
     Apply JWST pipeline 1D defringing to a single file.
 
     Uses `defringe_cube` to correct the SCI extension of the input file and saves the
-    result to the output file.
+    result to the output file. The corrected spaxels are saved in a new extension called
+    'FRINGE1D_CORRECTED'.
 
     Args:
         input_path: Path to the input FITS file.
         output_path: Path to the output FITS file.
+        wavelength_ranges: List of wavelength ranges to use for defringing. See the
+            `defringe_spectrum` function for more details.
         check_if_same_file: If True, raise a ValueError if `input_path` and
             `output_path` are the same.
         print_info: If True, print logging information.
@@ -92,6 +97,7 @@ def defringe_file(
             wavelengths=wavelengths,
             cube=cube,
             channel=channel,
+            wavelength_ranges=wavelength_ranges,
             print_info=print_info,
         )
         hdul['SCI'].data = cube_corrected  # type: ignore
@@ -110,6 +116,18 @@ def defringe_file(
         tools.add_header_reduction_note(hdul, 'Residual fringe corrected (1D)')
         header['HIERARCH FRINGE1D VERSION'] = (__version__, 'Software version')
         header['HIERARCH FRINGE1D CHANNEL'] = (channel, 'Channel number')
+        header['HIERARCH FRINGE1D USED_WAVL_RANGES'] = (
+            wavelength_ranges is not None,
+            'Limited defringing to specific wavelength ranges',
+        )
+        if wavelength_ranges is not None:
+            header['HIERARCH FRINGE1D NUM_WAVL_RANGES'] = (
+                len(wavelength_ranges),
+                'Number of wavelength ranges used for defringing',
+            )
+            for i, (start, stop) in enumerate(wavelength_ranges):
+                header[f'HIERARCH FRINGE1D WAVL_RANGE_{i}_START'] = start
+                header[f'HIERARCH FRINGE1D WAVL_RANGE_{i}_STOP'] = stop
 
         tools.check_path(output_path)
         hdul.writeto(output_path, overwrite=True)
@@ -120,6 +138,7 @@ def defringe_cube(
     cube: np.ndarray,
     channel: int,
     *,
+    wavelength_ranges: Collection[tuple[float, float]] | None = None,
     print_info: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -133,6 +152,8 @@ def defringe_cube(
         wavelengths: Wavelengths.
         cube: Data cube.
         channel: MIRI channel number.
+        wavelength_ranges: List of wavelength ranges to use for defringing. See the
+            `defringe_spectrum` function for more details.
         print_info: If True, print logging information.
 
     Returns:
@@ -152,6 +173,7 @@ def defringe_cube(
             wavelengths=wavelengths,
             spectrum=cube[:, i1, i2],
             channel=channel,
+            wavelength_ranges=wavelength_ranges,
         )
     return output, corrected_spaxels
 
@@ -161,6 +183,7 @@ def defringe_spectrum(
     wavelengths: np.ndarray,
     spectrum: np.ndarray,
     channel: int,
+    wavelength_ranges: Collection[tuple[float, float]] | None = None,
 ) -> tuple[np.ndarray, bool]:
     """
     Apply JWST pipeline 1D defringing to a 1D spectrum. This is a wrapper around the
@@ -171,6 +194,14 @@ def defringe_spectrum(
         wavelengths: Wavelengths.
         spectrum: 1D spectrum.
         channel: MIRI channel number.
+        wavelength_ranges: List of wavelength ranges to use for defringing. This should
+            be a list of tuples, where each tuple contains the start and end wavelengths
+            of a range to use. For example, if `wavelength_ranges=[(5, 6), (7.5, 8)]`,
+            the defringing will be performed using the data between 5 and 6 microns and
+            between 7.5 and 8 microns (inclusive). Note that all provided wavelength
+            ranges are defringed simultaneously. Any data outside of these ranges is not
+            used as an input to the defringing algorithm, and will be left unchanged by
+            this function. If None, the entire wavelength range will be used.
 
     Returns:
         `(output_spectrum, was_defringed)` tuple, where `output_spectrum` is the
@@ -179,7 +210,14 @@ def defringe_spectrum(
     """
     output = spectrum.copy()
     was_defringed = False
+
     mask = np.isfinite(spectrum)
+    if wavelength_ranges is not None:
+        wavelength_range_mask = np.zeros_like(wavelengths, dtype=bool)
+        for start, stop in wavelength_ranges:
+            wavelength_range_mask |= (wavelengths >= start) & (wavelengths <= stop)
+        mask &= wavelength_range_mask
+
     if any(mask):
         try:
             output[mask] = fit_residual_fringes_1d(
@@ -200,7 +238,7 @@ def main():
         argument_default=argparse.SUPPRESS,
     )
     parser.add_argument(
-        'input-paths',
+        'input_paths',
         nargs='+',
         help='Paths to the input FITS files.',
     )
@@ -216,6 +254,21 @@ def main():
         help='Path to the output FITS file. Can only be used with a single input file.',
     )
     parser.add_argument(
+        '--wavelength-range',
+        '-w',
+        nargs=2,
+        type=float,
+        action='append',
+        default=None,
+        metavar=('START', 'STOP'),
+        help=(
+            'Wavelength ranges to defringe, can be used multiple times. '
+            'For example, use `-w 1 2 -w 3 4` to only defringe between 1 and 2 microns '
+            'and between 3 and 4 microns. If not provided, the entire wavelength range '
+            'will be used.'
+        ),
+    )
+    parser.add_argument(
         '--print-info',
         action=argparse.BooleanOptionalAction,
         help='Print logging information.',
@@ -229,22 +282,13 @@ def main():
         help='Allow the input and output paths to be the same.',
     )
     args = parser.parse_args()
+    kwargs = {k: v for k, v in vars(args).items() if k not in {'input_paths'}}
     if 'output_path' in args:
         if len(args.input_paths) > 1:
             parser.error('Cannot use output-path with multiple input files')
-        defringe_file(
-            input_path=args.input_paths[0],
-            output_path=args.output_path,
-            check_if_same_file=args.check_if_same_file,
-            print_info=args.print_info,
-        )
+        defringe_file(input_path=args.input_paths[0], **kwargs)
     else:
-        defringe_multiple(
-            *args.input_paths,
-            output_directory=args.directory_out,
-            check_if_same_file=args.check_if_same_file,
-            print_info=args.print_info,
-        )
+        defringe_multiple(*args.input_paths, **kwargs)
 
 
 if __name__ == '__main__':
