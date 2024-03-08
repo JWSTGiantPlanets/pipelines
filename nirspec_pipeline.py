@@ -120,7 +120,7 @@ Depending on the number of dithers/groups/integrations etc. for your data,
 you may need to increase the walltime and decrease the number of nodes (ppn).
 
 To use this script you will need to:
-- replace `py311` in the `conda activate` line to the name of your conda environment
+- replace `py311` in the `source ~/miniconda...` line to your conda environemnt name
 - replace the two references to `/data/uranus/lon1` with the path to your data :: 
 
     #!/bin/bash
@@ -133,8 +133,7 @@ To use this script you will need to:
     #SBATCH --account=nemesis
     #SBATCH --output=slurm-%j-%x.out
 
-    source ~/.bashrc
-    conda activate py311
+    source ~/miniconda3/bin/activate py311
 
     export CRDS_PATH="/data/nemesis/jwst/crds_cache"
     export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
