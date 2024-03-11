@@ -170,8 +170,8 @@ STEP_DESCRIPTIONS = """
 - `stage2`: Run the standard JWST reduction pipeline stage 2 (including optional background subtraction).
 - `defringe`: Run the JWST reduction pipeline 2D residual fringe step (note `defringe_1d` is generally preferred) [optional].
 - `stage3`: Run the standard JWST reduction pipeline stage 3.
-- `defringe_1d`: Run the JWST reduction pipeline 1D residual fringe step [optional].
 - `navigate`: Navigate reduced files.
+- `defringe_1d`: Run the JWST reduction pipeline 1D residual fringe step [optional].
 - `psf`: Correct PSF effects using a forward model convolved with telescope's PSF [optional].
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
 - `flat`: Correct flat effects using synthetic flat field cubes.
@@ -230,8 +230,8 @@ STEPS = (
     'stage2',
     'defringe',
     'stage3',
-    'defringe_1d',
     'navigate',
+    'defringe_1d',
     'psf',
     'desaturate',
     'flat',
@@ -756,7 +756,6 @@ def main():
     parser.add_argument(
         '--defringe',
         action=argparse_utils.BooleanOrBothAction,
-        default='both',
         help="""Toggle 2D defringing of the data. Note that 1D defringing is generally
             preferred over this 2D defringing. This 2D defringing is disabled by 
             default.""",
