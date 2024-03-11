@@ -9,7 +9,7 @@ example usage:
     python3 defringe_1d.py data/input/*.fits -d data/output
     python3 defringe_1d.py data.fits -o data.fits --no-check-if-same-file
 """
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 import argparse
 from collections.abc import Collection
 from pathlib import Path
