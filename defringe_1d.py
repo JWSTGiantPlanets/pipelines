@@ -226,7 +226,7 @@ def defringe_spectrum(
                 channel=channel,
             )
             was_defringed = True
-        except (np.linalg.LinAlgError, ValueError):
+        except (np.linalg.LinAlgError, ValueError, IndexError):
             pass
     return output, was_defringed
 
