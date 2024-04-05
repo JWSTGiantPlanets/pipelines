@@ -278,7 +278,7 @@ def do_tile(
     channel: str | None = None,  # MIRI metadata
     band: str | None = None,
     fringe: str | None = None,
-    filter: str | None = None,  # NIRSpec metadata
+    filter_: str | None = None,  # NIRSpec metadata
     grating: str | None = None,
 ):
     header = fits.Header()
@@ -292,8 +292,8 @@ def do_tile(
         header[f'HIERARCH {HEADER_PREFIX} BAND'] = band
     if fringe is not None:
         header[f'HIERARCH {HEADER_PREFIX} DEFRINGED'] = bool(fringe)
-    if filter is not None:
-        header[f'HIERARCH {HEADER_PREFIX} FILTER'] = filter
+    if filter_ is not None:
+        header[f'HIERARCH {HEADER_PREFIX} FILTER'] = filter_
     if grating is not None:
         header[f'HIERARCH {HEADER_PREFIX} GRATING'] = grating
 
