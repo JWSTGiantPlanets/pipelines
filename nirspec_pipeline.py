@@ -163,6 +163,7 @@ STEP_DESCRIPTIONS = """
 - `navigate`: Navigate reduced files.
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
 - `despike`: Clean cubes by removing extreme outlier pixels.
+- `flat`: Correct flat effects using synthetic flat field cubes.
 - `plot`: Generate quick look summary plots of data.
 - `animate`: Generate summary animations of data.
 """
@@ -200,8 +201,11 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"o
 """
 from typing import Any, Collection
 
+import tqdm
+from astropy.io import fits
 from jwst.assign_wcs.util import NoDataOnDetectorError
 
+import flat_field
 from pipeline import BoolOrBoth, Pipeline, Step, get_pipeline_argument_parser
 
 # Pipeline constants for NIRSpec
@@ -213,6 +217,7 @@ STEPS: tuple[Step, ...] = (
     'navigate',
     'desaturate',
     'despike',
+    'flat',
     'plot',
     'animate',
 )
@@ -231,11 +236,15 @@ DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
         }
     },
 }
-STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {'despike': ('', 'stage4_despike')}
+STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
+    'despike': ('', 'stage4_despike'),
+    'flat': ('stage4_despike', 'stage5_flat'),
+}
 STAGE_DIRECTORIES_TO_PLOT = (
     'stage3',
     'stage3_desaturated',
     'stage4_despike',
+    'stage5_flat',
 )
 
 
@@ -254,6 +263,7 @@ def run_pipeline(
     step_kwargs: dict[Step, dict[str, Any]] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
+    flat_data_path: str | None = None,
 ) -> None:
     """
     Run the full NIRSpec IFU reduction pipeline, including the standard reduction from
@@ -348,6 +358,10 @@ def run_pipeline(
             processing for the reduction steps (i.e. `stage1`-`stage3`). This will be
             merged with `parallel_kwargs` (i.e.
             `parallel_kwargs | reduction_parallel_kwargs`).
+        flat_data_path: Path to the flat field data. This path should contain
+            `{grating}` and `{filter}` placeholders, which will be replaced by
+            appropriate values for each grating and filter setting. If this is not
+            defined, then the flat field step will be skipped.
     """
     pipeline = NirspecPipeline(
         root_path,
@@ -360,6 +374,7 @@ def run_pipeline(
         step_kwargs=step_kwargs,
         parallel_kwargs=parallel_kwargs,
         reduction_parallel_kwargs=reduction_parallel_kwargs,
+        flat_data_path=flat_data_path,
     )
     pipeline.run(
         skip_steps=skip_steps,
@@ -369,6 +384,12 @@ def run_pipeline(
 
 
 class NirspecPipeline(Pipeline):
+    def __init__(self, *args, flat_data_path: str | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.flat_data_path = (
+            None if flat_data_path is None else self.standardise_path(flat_data_path)
+        )
+
     @staticmethod
     def get_instrument() -> str:
         return 'NIRSpec'
@@ -396,6 +417,21 @@ class NirspecPipeline(Pipeline):
     def stage_directories_to_plot(self) -> tuple[str, ...]:
         return STAGE_DIRECTORIES_TO_PLOT
 
+    def process_skip_steps(
+        self,
+        skip_steps: Collection[Step] | None,
+        start_step: Step | None,
+        end_step: Step | None,
+    ) -> set[Step]:
+        skip_steps = super().process_skip_steps(skip_steps, start_step, end_step)
+        if self.flat_data_path is None:
+            skip_steps.add('flat')
+        return skip_steps
+
+    def print_reduction_info(self, skip_steps: set[Step]) -> None:
+        super().print_reduction_info(skip_steps)
+        self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
+
     # Step overrides
     def reduction_spec2_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         try:
@@ -404,10 +440,42 @@ class NirspecPipeline(Pipeline):
             path_in, output_dir, kwargs = args
             print(f'No data on detector for {path_in!r}, skipping')
 
+    # flat
+    def run_flat(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['flat']
+        self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
+
+        if self.flat_data_path is None:
+            self.log('Flat data path not defined, skipping flat step')
+            return
+
+        # Use d* to skip dither combined files
+        paths_in = self.get_paths(
+            self.root_path, dir_in, 'd*', '*_nav.fits', filter_variants=True
+        )
+        self.log(f'Processing {len(paths_in)} files...', time=False)
+        for p_in in tqdm.tqdm(paths_in, desc='flat'):
+            p_out = self.replace_path_part(p_in, -3, dir_out, old=dir_in)
+            with fits.open(p_in) as hdul:
+                hdr = hdul['PRIMARY'].header  #  type: ignore
+            p_flat = self.flat_data_path.format(
+                grating=hdr['GRATING'].lower(),
+                filter=hdr['FILTER'].lower(),
+            )
+            flat_field.apply_flat(p_in, p_out, p_flat, **kwargs)
+
 
 def main():
     parser = get_pipeline_argument_parser(
         NirspecPipeline, STEP_DESCRIPTIONS, CLI_EXAMPLES
+    )
+    parser.add_argument(
+        '--flat-data-path',
+        type=str,
+        help="""Path to the flat field data. This path should contain `{grating}` and
+            `{filter}` placeholders, which will be replaced by appropriate values for
+            each grating and filter setting. If this is not defined, then the flat field
+            step will be skipped.""",
     )
     run_pipeline(**vars(parser.parse_args()))
 

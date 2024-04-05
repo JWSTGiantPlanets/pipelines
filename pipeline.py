@@ -54,11 +54,11 @@ Step: TypeAlias = Literal[
     'navigate',
     'desaturate',
     'despike',
+    'flat',
     'plot',
     'animate',
     'defringe_1d',  # MIRI only
     'psf',  # MIRI only
-    'flat',  # MIRI only
     'defringe',  # MIRI only
 ]
 BoolOrBoth: TypeAlias = Literal[True, False, 'both']
