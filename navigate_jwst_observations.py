@@ -41,6 +41,7 @@ The kernel directory can also be customised with the -k flag:
 
 >>> python3 navigate_jwst_observations.py -k /data/nemesis/jwst/scripts/kernels data/stage3/*_s3d.fits
 """
+__version__ = '1.0.0'
 import argparse
 import datetime
 import glob
@@ -136,11 +137,19 @@ def navigate_file(
         header.append(('', sep), useblanks=False, bottom=True)
         date = datetime.datetime.now().isoformat()
         header.append(('HIERARCH NAV DATE', date), useblanks=False, bottom=True)
+        header.append(('HIERARCH NAV VERSION', __version__, 'Software version'))
         header.append(
             (
                 'HIERARCH NAV CLASS',
                 navigator.__class__.__name__,
                 'Navigator class',
+            )
+        )
+        header.append(
+            (
+                'HIERARCH NAV CLASS VERSION',
+                jwst_navigator.__version__,
+                'Navigator class version',
             )
         )
         header.append(('HIERARCH NAV BASIC', basic, 'Basic navigation used'))

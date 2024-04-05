@@ -67,8 +67,8 @@ This will run the full pipeline, and output data files appropriate directories (
 
 By default, most steps of the pipeline are effectively run twice, each step with the 
 residual defringe step disabled first, then with it enabled. If you only want defringed
-or non-defringed data, you can customise this behaviour with the `defringe` argument or 
-the `--defringe` or `--no-defringe` flags.
+or non-defringed data, you can customise this behaviour with the pipeline arguments/CLI
+flags.
 
 If the pipeline is run with desaturation enabled, the pipeline flow is:
 - Firstly, multiple versions of the stage0 cubes are created with different numbers of 
@@ -129,7 +129,7 @@ The walltime and memory requirements have been tested for the giant planet obser
 etc., you may need to increase the walltime and decrease the number of nodes (ppn).
 
 To use this script you will need to:
-- replace `py311` in the `conda activate` line to the name of your conda environment
+- replace `py311` in the `source ~/miniconda...` line to your conda environemnt name
 - replace the two references to `/data/uranus/lon1` with the path to your data :: 
 
     #!/bin/bash
@@ -142,8 +142,7 @@ To use this script you will need to:
     #SBATCH --account=nemesis
     #SBATCH --output=slurm-%j-%x.out
 
-    source ~/.bashrc
-    conda activate py311
+    source ~/miniconda3/bin/activate py311
 
     export CRDS_PATH="/data/nemesis/jwst/crds_cache"
     export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
@@ -169,10 +168,11 @@ STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
 - `stage1`: Run the standard JWST reduction pipeline stage 1.
 - `stage2`: Run the standard JWST reduction pipeline stage 2 (including optional background subtraction).
-- `defringe`: Run the JWST reduction pipeline residual fringe step [optional].
+- `defringe`: Run the JWST reduction pipeline 2D residual fringe step (note `defringe_1d` is generally preferred) [optional].
 - `stage3`: Run the standard JWST reduction pipeline stage 3.
 - `navigate`: Navigate reduced files.
-- `psf`: Correct PSF effects using a forward model convolved with telescope's PSF.
+- `defringe_1d`: Run the JWST reduction pipeline 1D residual fringe step [optional].
+- `psf`: Correct PSF effects using a forward model convolved with telescope's PSF [optional].
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
 - `flat`: Correct flat effects using synthetic flat field cubes.
 - `despike`: Clean cubes by removing extreme outlier pixels.
@@ -187,28 +187,27 @@ python3 miri_pipeline.py -h
 # Run the full pipeline, with all steps enabled
 python3 miri_pipeline.py /data/uranus/lon1
 
-# Run the full pipeline, without any desaturation
-python3 miri_pipeline.py /data/uranus/lon1 --no-desaturate
+# Run the full pipeline, with desaturation
+python3 miri_pipeline.py /data/uranus/lon1 --desaturate
 
 # Run the full pipeline, with only the defringed data
-python3 miri_pipeline.py /data/uranus/lon1 --defringe
+python3 miri_pipeline.py /data/uranus/lon1 --defringe_1d
 
 # Run the pipeline, including background subtraction
-python3 miri_pipeline.py /data/uranus/lon1 --background_path /data/uranus/background
+python3 miri_pipeline.py /data/uranus/lon1 --background-path /data/uranus/background
 
 # Run the pipeline, but stop before creating any visualisations
-python3 miri_pipeline.py /data/uranus/lon1 --end_step despike
+python3 miri_pipeline.py /data/uranus/lon1 --end-step despike
 
 # Only run the plotting step
-python3 miri_pipeline.py /data/uranus/lon1 --start_step plot --end_step plot
+python3 miri_pipeline.py /data/uranus/lon1 --start-step plot --end-step plot
 
 # Re-run the pipeline, skipping the initial reduction steps
-python3 miri_pipeline.py /data/uranus/lon1 --start_step desaturate
+python3 miri_pipeline.py /data/uranus/lon1 --desaturate --start-step desaturate
 
 # Run the pipeline, passing custom arguments to different steps
 python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'
 """
-import argparse
 import os
 import pathlib
 from typing import Any, Collection
@@ -217,8 +216,10 @@ import tqdm
 from astropy.io import fits
 from jwst.residual_fringe import ResidualFringeStep
 
+import argparse_utils
 import flat_field
 import psf_correction
+from defringe_1d import defringe_file
 from parallel_tools import runmany
 from pipeline import BoolOrBoth, Pipeline, RootPath, Step, get_pipeline_argument_parser
 
@@ -230,6 +231,7 @@ STEPS = (
     'defringe',
     'stage3',
     'navigate',
+    'defringe_1d',
     'psf',
     'desaturate',
     'flat',
@@ -260,6 +262,7 @@ STAGE_DIRECTORIES_TO_PLOT = (
 )
 STEP_DIRECTORIES: dict[Step, tuple[str, str]] = {
     'defringe': ('stage2', 'stage2'),
+    'defringe_1d': ('stage3', 'stage3'),
     'flat': ('', 'stage4_flat'),
     'psf': ('stage3', 'stage3'),
     'despike': ('stage4_flat', 'stage5_despike'),
@@ -298,7 +301,7 @@ def run_pipeline(
     start_step: Step | None = None,
     end_step: Step | None = None,
     parallel: float | bool = False,
-    desaturate: bool = True,
+    desaturate: bool = False,
     groups_to_use: list[int] | None = None,
     background_subtract: BoolOrBoth = 'both',
     background_path: str | None = None,
@@ -306,8 +309,9 @@ def run_pipeline(
     step_kwargs: dict[Step, dict[str, Any]] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
     reduction_parallel_kwargs: dict[str, Any] | None = None,
-    defringe: BoolOrBoth = 'both',
-    correct_psf: BoolOrBoth = 'both',
+    defringe: BoolOrBoth = False,
+    correct_psf: BoolOrBoth = False,
+    defringe_1d: BoolOrBoth = 'both',
     flat_data_path: str = DEFAULT_FLAT_DATA_PATH,
 ) -> None:
     """
@@ -404,18 +408,25 @@ def run_pipeline(
             merged with `parallel_kwargs` (i.e.
             `parallel_kwargs | reduction_parallel_kwargs`).
 
-        defringe: Toggle defringing of the data. If True, defringe data will be saved
-            and processed. If `'both'` (the default), the pipeline steps will
-            effectively be run twice, first without defringing, then again with
-            defringing enabled. Defringed data will be saved in separate directories
-            (e.g. `root_path/stage3/d1_fringe`), so both sets of data will be available
-            for further analysis.
+        defringe: Toggle 2D defringing of the data. If True, defringe data will be saved
+            and processed. If `'both'`, the pipeline steps will effectively be run
+            twice, first without defringing, then again with defringing enabled.
+            Defringed data will be saved in separate directories (e.g.
+            `root_path/stage3/d1_fringe`), so both sets of data will be available for
+            further analysis. Note that `defringe_1d` is generally preferred over this
+            2D defringing.
         correct_psf: Toggle PSF correction of the data. If True, PSF corrected data will
             be saved and processed. If `'both'` (the default), the pipeline steps will
             effectively be run twice, first without PSF correction, then again with PSF
             correction enabled. PSF corrected data will be saved in separate directories
             (e.g. `root_path/stage3/d1_psf`), so both sets of data will be available
             for further analysis.
+        defringe_1d: Toggle 1D defringing of the data. If True, 1D defringed data will
+            be saved and processed. If `'both'` (the default), the pipeline steps will
+            effectively be run twice, first without 1D defringing, then again with 1D
+            defringing enabled. 1D defringed data will be saved in separate directories
+            (e.g. `root_path/stage3/d1_fringe1d`), so both sets of data will be
+            available for further analysis.
         flat_data_path: Optionally specify custom path to the flat field data. This path
             should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
             be replaced by appropriate values for each channel, band and defringe
@@ -434,6 +445,7 @@ def run_pipeline(
         reduction_parallel_kwargs=reduction_parallel_kwargs,
         flat_data_path=flat_data_path,
         defringe=defringe,
+        defringe_1d=defringe_1d,
         correct_psf=correct_psf,
     )
     pipeline.run(
@@ -448,13 +460,15 @@ class MiriPipeline(Pipeline):
         self,
         *args,
         flat_data_path: str,
-        defringe: BoolOrBoth = 'both',
+        defringe: BoolOrBoth = False,
+        defringe_1d: BoolOrBoth = False,
         correct_psf: BoolOrBoth = 'both',
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.flat_data_path = self.standardise_path(flat_data_path)
         self.defringe = defringe
+        self.defringe_1d = defringe_1d
         self.correct_psf = correct_psf
 
     @staticmethod
@@ -504,6 +518,8 @@ class MiriPipeline(Pipeline):
         variants = super().data_variants_individual
         if self.defringe:
             variants.add('fringe')
+        if self.defringe_1d:
+            variants.add('fringe1d')
         if self.correct_psf:
             variants.add('psf')
         return variants
@@ -513,13 +529,16 @@ class MiriPipeline(Pipeline):
         variants_required = super().data_variants_individual_required
         if self.defringe is True:
             variants_required.add('fringe')
+        if self.defringe_1d is True:
+            variants_required.add('fringe1d')
         if self.correct_psf is True:
             variants_required.add('psf')
         return variants_required
 
     def print_reduction_info(self, skip_steps: set[Step]) -> None:
         super().print_reduction_info(skip_steps)
-        self.log(f'Defringe: {self.defringe!r}', time=False)
+        self.log(f'2D defringe: {self.defringe!r}', time=False)
+        self.log(f'1D defringe: {self.defringe_1d!r}', time=False)
         self.log(f'Correct PSF: {self.correct_psf!r}', time=False)
         self.log(f'Flat data path: {self.flat_data_path!r}', time=False)
 
@@ -564,7 +583,7 @@ class MiriPipeline(Pipeline):
         self, root_path: RootPath, variant: frozenset[str]
     ) -> tuple[frozenset[str], list[str]]:
         dir_in, dir_out = self.step_directories['stage3']
-        variant = variant - {'psf'}  # psf is done after stage3
+        variant = variant - {'psf', 'fringe1d'}  # steps done after stage3
         if variant == frozenset():
             paths = self.get_paths(root_path, dir_in, '*cal.fits')
         elif variant == frozenset({'bg'}):
@@ -576,6 +595,63 @@ class MiriPipeline(Pipeline):
         else:
             raise ValueError(f'Unknown variant: {variant}')
         return variant, paths
+
+    # defringe_1d
+    def run_defringe_1d(self, kwargs: dict[str, Any]) -> None:
+        dir_in, dir_out = self.step_directories['defringe_1d']
+        input_variant_combinations = {
+            v - {'psf', 'fringe1d'}
+            for v in self.data_variant_combinations
+            if 'fringe1d' in v
+        }
+        for root_path in self.iterate_group_root_paths():
+            paths_list: list[tuple[str, str]] = []
+            for input_variant in input_variant_combinations:
+                output_variant = input_variant | {'fringe1d'}
+                paths_in = self.get_paths(
+                    root_path,
+                    dir_in,
+                    '*',
+                    '*_nav.fits',
+                    filter_variants=True,
+                    variant_combinations={input_variant},
+                )
+                for p_in in paths_in:
+                    # We need to add the fringe1d variant to the path
+                    dirname_in = pathlib.Path(p_in).parts[-2]
+                    dirname_without_variant = dirname_in.split('_')[0]
+                    dirname_variants = frozenset(dirname_in.split('_')[1:])
+                    dirname_out = (
+                        dirname_without_variant + '_' + '_'.join(sorted(output_variant))
+                    )
+                    if dirname_variants != input_variant:
+                        raise ValueError(
+                            f'Error when checking variant path for {p_in}'
+                            f'(expected variant {input_variant!r}, got {dirname_variants!r})'
+                        )
+
+                    p_out = self.replace_path_part(p_in, -3, dir_out, old=dir_in)
+                    p_out = self.replace_path_part(
+                        p_out, -2, dirname_out, old=dirname_in
+                    )
+                    if p_out == p_in:
+                        raise ValueError(
+                            f'Error when checking output path for {p_in}'
+                            '(input and output paths are the same)'
+                        )
+
+                    paths_list.append((p_in, p_out))
+            args_list = [(p_in, p_out, kwargs) for p_in, p_out in paths_list]
+            runmany(
+                self.defringe_1d_fn,
+                args_list,
+                desc='defringe_1d',
+                **self.parallel_kwargs,
+            )
+
+    def defringe_1d_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
+        p_in, p_out, kwargs = args
+        defringe_file(p_in, p_out, **kwargs)
 
     # psf
     def run_psf(self, kwargs: dict[str, Any]) -> None:
@@ -671,15 +747,20 @@ class MiriPipeline(Pipeline):
 def main():
     parser = get_pipeline_argument_parser(MiriPipeline, STEP_DESCRIPTIONS, CLI_EXAMPLES)
     parser.add_argument(
-        '--defringe',
-        action=argparse.BooleanOptionalAction,
-        default='both',
-        help="""Toggle defringing of the data. If unspecified, the pipeline steps will
-            effectively be run twice, first without defringing, then again with
-            defringing enabled.""",
+        '--defringe-1d',
+        action=argparse_utils.BooleanOrBothAction,
+        help="""Toggle 1D defringing of the data. Note that this is generally
+                preferred over the 2D defringing. If unspecified, the default is
+                to run with both with and without 1D defringing.""",
     )
     parser.add_argument(
-        '--flat_data_path',
+        '--defringe',
+        action=argparse_utils.BooleanOrBothAction,
+        help="""Toggle 2D defringing of the data. Note that 1D defringing is generally
+            preferred over this 2D defringing. This 2D defringing is disabled by 
+            default.""",
+    )
+    parser.add_argument(
         '--flat-data-path',
         type=str,
         help="""Optionally specify custom path to the flat field data. This path
@@ -688,13 +769,10 @@ def main():
             setting.""",
     )
     parser.add_argument(
-        '--correct_psf',
         '--correct-psf',
-        action=argparse.BooleanOptionalAction,
-        default='both',
-        help="""Toggle PSF correction of the data. If unspecified, the pipeline steps
-            will effectively be run twice, first without PSF correction, then again with
-            PSF correction enabled.""",
+        action=argparse_utils.BooleanOrBothAction,
+        help="""Toggle PSF correction of the data. This PSF correction is disabled by
+            default.""",
     )
     run_pipeline(**vars(parser.parse_args()))
 

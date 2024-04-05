@@ -11,6 +11,7 @@ King et al., (2023). Custom JWST NIRSpec/IFU and MIRI/MRS Data Reduction Pipelin
 Solar System Targets. Research Notes of the AAS, 7(10), 223,
 https://doi.org/10.3847/2515-5172/ad045f
 """
+
 import argparse
 import datetime
 import glob
@@ -35,6 +36,7 @@ from jwst.associations.asn_from_list import asn_from_list
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
 from jwst.pipeline import Detector1Pipeline, Spec2Pipeline, Spec3Pipeline
 
+import argparse_utils
 import desaturate_data
 import despike_data
 import jwst_summary_animation
@@ -54,6 +56,7 @@ Step: TypeAlias = Literal[
     'despike',
     'plot',
     'animate',
+    'defringe_1d',  # MIRI only
     'psf',  # MIRI only
     'flat',  # MIRI only
     'defringe',  # MIRI only
@@ -143,9 +146,9 @@ class Pipeline:
         root_path: str,
         *,
         parallel: float | bool = False,
-        desaturate: bool = True,
+        desaturate: bool = False,
         groups_to_use: list[int] | None | str = None,
-        background_subtract: BoolOrBoth,
+        background_subtract: BoolOrBoth = 'both',
         background_path: str | None = None,
         basic_navigation: bool = False,
         step_kwargs: dict[Step, dict[str, Any]] | None | str = None,
@@ -340,13 +343,11 @@ class Pipeline:
     # path processing...
     @staticmethod
     @overload
-    def standardise_path(path: str) -> str:
-        ...
+    def standardise_path(path: str) -> str: ...
 
     @staticmethod
     @overload
-    def standardise_path(path: None) -> None:
-        ...
+    def standardise_path(path: None) -> None: ...
 
     @staticmethod
     def standardise_path(path: str | None) -> str | None:
@@ -722,7 +723,7 @@ class Pipeline:
                     root_path, full_variant
                 )
                 # Skip if we have already done this variant. E.g. for MIRI, the PSF
-                # variants occur after stage3, so fulll_variant={'bg'} and
+                # variants occur after stage3, so full_variant={'bg'} and
                 # full_variant={'psf', 'bg'} are equivalent, so both will have
                 # variant={'bg'}.
                 if variant in variants_done:
@@ -994,13 +995,20 @@ def get_pipeline_argument_parser(
     """
     suffix = step_descriptions + '\n' + cli_examples
     name = pipeline_class.get_instrument()
-    parser = argparse.ArgumentParser(
+    parser = argparse_utils.UnderscoreArgumentParser(
         description=(
             f'Full JWST {name} IFU pipeline including the standard reduction from '
             'stage0 to stage3, and custom pipeline steps for additional cleaning and '
             'data visualisation. For more customisation, this script can be imported '
-            'and run in Python (see the source code for mode details).\n\n'
-            'The following steps are run in the full pipeline:' + suffix
+            'and run in Python (see the source code for mode details).'
+            '\n\n'
+            'Some arguments are used to toggle pipeline steps, and can take three '
+            'values. For example, `--background-subtract` enables background '
+            'subtraction, `--no-background-subtract` disables it, and '
+            '`--both-background-subtract` effectively runs the pipeline twice, with '
+            'and without background subtraction (saving two versions of the data).'
+            '\n\n'
+            'The following steps can be run in the full pipeline:' + suffix
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         argument_default=argparse.SUPPRESS,
@@ -1027,42 +1035,39 @@ def get_pipeline_argument_parser(
     parser.add_argument(
         '--desaturate',
         action=argparse.BooleanOptionalAction,
-        default=True,
         help="""Toggle desaturation of the data. If desaturation is enabled the 
             `reduction` step will be run for different numbers of groups, which are then
             combined in the `desaturate` step to produce a desaturated data cube. This
-            desaturation is enabled by default.
+            desaturation is disabled by default.
             """,
     )
     parser.add_argument(
-        '--groups_to_use',
         '--groups-to-use',
         type=str,
-        help="""Comma-separated list of groups to keep. For example, `1,2,3,4` will
-            keep the first four groups. If unspecified, all groups will be kept.""",
+        help="""Comma-separated list of groups to keep when desaturating. For example, 
+            `1,2,3,4` will keep the first four groups. If unspecified, all groups will 
+            be kept.""",
     )
     parser.add_argument(
-        '--background_subtract',
         '--background-subtract',
-        action=argparse.BooleanOptionalAction,
-        default='both',
-        help="""Toggle background subtractio of the data. If unspecified, then versions
-        with and without background subtraction will be created. Background subtraction
-        requires --background_path to be specified.""",
+        action=argparse_utils.BooleanOrBothAction,
+        help="""Toggle background subtraction of the data. If --both-background-subtract
+        is used, then versions with and without background subtraction will be created.
+        Background subtraction requires --background-path to be specified. If 
+        unspecified, the default to run the pipeline both with and without background
+        subtraction.""",
     )
     parser.add_argument(
-        '--background_path',
         '--background-path',
         type=str,
         help="""Path to directory containing background data. For example, if
             your `root_path` is `/data/uranus/lon1`, the `background_path` may
             be `/data/uranus/background`. Note that background subtraction will
             require the background data to be already reduced to `stage1`. If no 
-            `background_path` is specified (the default), then no background subtraction
+            `background-path` is specified (the default), then no background subtraction
             will be performed.""",
     )
     parser.add_argument(
-        '--basic_navigation',
         '--basic-navigation',
         action='store_true',
         help="""Use basic navigation, and only save RA and Dec backplanes (e.g. useful
@@ -1072,7 +1077,6 @@ def get_pipeline_argument_parser(
             is mainly useful if you get SPICE errors when navigating the data.""",
     )
     parser.add_argument(
-        '--step_kwargs',
         '--step-kwargs',
         '--kwargs',
         '--kw',
@@ -1081,27 +1085,23 @@ def get_pipeline_argument_parser(
             steps. For example, 
             `--kwargs '{"stage3": {"steps": {"outlier_detection": {"snr": "30.0 24.0", "scale": "1.3 0.7"}}}, "plot": {"plot_brightest_spectrum": true}}'` 
             will pass the custom arguments to the stage3 and plot steps. This will be
-            merged with the default kwargs for each step.
-            """,
+            merged with the default kwargs for each step.""",
     )
     parser.add_argument(
-        '--skip_steps',
         '--skip-steps',
         nargs='+',
         type=str,
         help="""List of steps to skip. This is generally only useful if you are
             re-running part of the pipeline. Multiple steps can be passed as a
-            space-separated list. For example, `--skip_steps flat despike`.""",
+            space-separated list. For example, `--skip-steps flat despike`.""",
     )
     parser.add_argument(
-        '--start_step',
         '--start-step',
         type=str,
         help="""Convenience argument to add all steps before `start_step` to 
             `skip_steps`.""",
     )
     parser.add_argument(
-        '--end_step',
         '--end-step',
         type=str,
         help="""Convenience argument to add all steps steps after `end_step` to 
