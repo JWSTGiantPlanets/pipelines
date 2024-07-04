@@ -855,6 +855,7 @@ class Pipeline:
         # output files. Therefore, we only need to include the tile in the prodname if
         # it is needed to avoid filename collisions from these band separated output
         # files.
+        grouped_output: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]]
         grouped: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]] = {}
         grouped_with_band: dict[
             tuple[int | None, str, tuple[str | None, ...], tuple[str | None, ...]],
@@ -894,7 +895,16 @@ class Pipeline:
             for dither, tile, match_key, band_key in keys_with_tiles
         )
         include_tile_in_prodname = len(keys_with_tiles) != len(keys_without_tiles)
-        return grouped, include_tile_in_prodname
+        if include_tile_in_prodname:
+            grouped_output = grouped
+        else:
+            # If we don't need to include the tile in the prodname, we can merge the
+            # matched files into the same ASN (as e.g. different MIRI bands for the same
+            # tile may have different ACT_ID values).
+            grouped_output = {}
+            for (dither, tile, match_key), paths in grouped.items():
+                grouped_output.setdefault((dither, '', match_key), []).extend(paths)
+        return grouped_output, include_tile_in_prodname
 
     def get_file_match_keys_for_stage3(
         self, path: str | fits.Header
