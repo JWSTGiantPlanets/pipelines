@@ -24,6 +24,7 @@ from typing import (
     Generator,
     Literal,
     NewType,
+    Sequence,
     Type,
     TypeAlias,
     cast,
@@ -406,7 +407,7 @@ class Pipeline:
         filter_variants: bool = False,
         variant_combinations: set[frozenset[str]] | None = None,
         do_warning: bool = True,
-        warning_message: str | None = None,
+        warning_messages: Sequence[str] = (),
     ) -> list[str]:
         """Get a list of paths matching the given path parts."""
         pattern = os.path.join(root, *path_parts)
@@ -414,27 +415,33 @@ class Pipeline:
         if filter_variants:
             paths = self.filter_paths_for_data_variants(paths, variant_combinations)
         if do_warning and len(paths) == 0:
-            self.log(f'WARNING: no input files found matching pattern:')
-            self.log(f'    {pattern!r}', time=False)
+            variant_str = ''
             if filter_variants:
-                self.log('and with any of the following variants:', time=False)
-                for vc in (
-                    self.data_variant_combinations
-                    if variant_combinations is None
-                    else variant_combinations
-                ):
-                    self.log(f'    {"_".join(sorted(vc))}', time=False)
+                variant_str = ' with any of the following variants: ' + repr(
+                    [
+                        ('_'.join(sorted(vc)))
+                        for vc in (
+                            self.data_variant_combinations
+                            if variant_combinations is None
+                            else variant_combinations
+                        )
+                    ]
+                )
+            self.log(
+                f'WARNING: No input files found matching pattern: {pattern!r}{variant_str}.'
+            )
+            prefix = ' ' * len('WARNING: ')
             if pattern.endswith('_nav.fits'):
                 self.log(
-                    'Navigated (*_nav.fits) files are required as an input to this step.',
+                    f'{prefix}Navigated (*_nav.fits) files are required as an input to this step.',
                     time=False,
                 )
                 self.log(
-                    'If you are skipping the `navigate` step, try running the pipeline with `basic_navigation=True` instead.',
+                    f'{prefix}If you are skipping the `navigate` step, try running the pipeline with `basic_navigation=True` instead.',
                     time=False,
                 )
-            if warning_message is not None:
-                self.log(warning_message, time=False)
+            for warning_message in warning_messages:
+                self.log(f'{prefix}{warning_message}', time=False)
         return paths
 
     @property
@@ -604,7 +611,15 @@ class Pipeline:
     def run_stage1(self, kwargs: dict[str, Any]) -> None:
         dir_in, dir_out = self.step_directories['stage1']
         for root_path in self.iterate_group_root_paths():
-            paths_in = self.get_paths(root_path, dir_in, '*uncal.fits')
+            paths_in = self.get_paths(
+                root_path,
+                dir_in,
+                '*uncal.fits',
+                warning_messages=[
+                    'Check you have provided the correct path data directory (i.e. the `root_path` argument).',
+                    'The root_path should contain a subdirectory named `stage0` that contains the uncalibrated FITS files.',
+                ],
+            )
             output_dir = os.path.join(root_path, dir_out)
             args_list = [(p, output_dir, kwargs) for p in paths_in]
             check_path(output_dir)
