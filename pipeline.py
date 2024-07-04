@@ -405,11 +405,36 @@ class Pipeline:
         *path_parts: str,
         filter_variants: bool = False,
         variant_combinations: set[frozenset[str]] | None = None,
+        do_warning: bool = True,
+        warning_message: str | None = None,
     ) -> list[str]:
         """Get a list of paths matching the given path parts."""
-        paths = sorted(glob.glob(os.path.join(root, *path_parts)))
+        pattern = os.path.join(root, *path_parts)
+        paths = sorted(glob.glob(pattern))
         if filter_variants:
             paths = self.filter_paths_for_data_variants(paths, variant_combinations)
+        if do_warning and len(paths) == 0:
+            self.log(f'WARNING: no input files found matching pattern:')
+            self.log(f'    {pattern!r}', time=False)
+            if filter_variants:
+                self.log('and with any of the following variants:', time=False)
+                for vc in (
+                    self.data_variant_combinations
+                    if variant_combinations is None
+                    else variant_combinations
+                ):
+                    self.log(f'    {"_".join(sorted(vc))}', time=False)
+            if pattern.endswith('_nav.fits'):
+                self.log(
+                    'Navigated (*_nav.fits) files are required as an input to this step.',
+                    time=False,
+                )
+                self.log(
+                    'If you are skipping the `navigate` step, try running the pipeline with `basic_navigation=True` instead.',
+                    time=False,
+                )
+            if warning_message is not None:
+                self.log(warning_message, time=False)
         return paths
 
     @property
