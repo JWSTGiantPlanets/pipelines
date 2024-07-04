@@ -494,7 +494,7 @@ class MiriPipeline(Pipeline):
 
     @property
     def stage3_file_match_hdr_keys(self) -> tuple[str, ...]:
-        return ('CHANNEL', 'BAND')
+        return ()
 
     @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
