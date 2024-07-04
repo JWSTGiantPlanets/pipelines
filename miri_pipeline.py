@@ -497,6 +497,10 @@ class MiriPipeline(Pipeline):
         return ()
 
     @property
+    def stage3_file_match_hdr_band_keys(self) -> tuple[str, ...]:
+        return ('CHANNEL', 'BAND')
+
+    @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
         return STAGE_DIRECTORIES_TO_PLOT
 
