@@ -352,10 +352,13 @@ class Pipeline:
 
     @staticmethod
     def standardise_path(path: str | None) -> str | None:
-        """Standardise a path by expanding environment variables and user."""
+        """
+        Standardise a path by expanding environment variables and user, then converting
+        to an absolute path.
+        """
         if path is None:
             return None
-        return os.path.expandvars(os.path.expanduser(path))
+        return os.path.abspath(os.path.expandvars(os.path.expanduser(path)))
 
     @staticmethod
     def replace_path_part(
