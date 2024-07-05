@@ -230,8 +230,8 @@ STEPS = (
     'stage2',
     'defringe',
     'stage3',
-    'navigate',
     'defringe_1d',
+    'navigate',
     'psf',
     'desaturate',
     'flat',
@@ -249,7 +249,6 @@ DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
     },
     'stage3': {
         'steps': {
-            'extract_1d': {'skip': True},
             'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
         }
     },
@@ -616,7 +615,7 @@ class MiriPipeline(Pipeline):
                     root_path,
                     dir_in,
                     '*',
-                    '*_nav.fits',
+                    '*_s3d.fits',
                     filter_variants=True,
                     variant_combinations={input_variant},
                 )
