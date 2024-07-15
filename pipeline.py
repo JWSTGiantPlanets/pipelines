@@ -221,14 +221,6 @@ class Pipeline:
         raise NotImplementedError
 
     @property
-    def stage3_file_match_hdr_band_keys(self) -> tuple[str, ...]:
-        """
-        Header keys for separating matched stage2 files that will produce independent
-        otuput files, even when placed in the same ASN file.
-        """
-        return ()
-
-    @property
     def stage_directories_to_plot(self) -> tuple[str, ...]:
         """Tuple of directory names to generate plots for."""
         raise NotImplementedError
@@ -783,9 +775,20 @@ class Pipeline:
                 variant_dirname = '_'.join(sorted(variant))
                 if len(variant) > 0:
                     variant_dirname = f'_{variant_dirname}'
-                grouped_files, include_tile_in_prodname = (
-                    self.group_stage2_files_for_stage3(paths_in)
+                grouped_files = self.group_stage2_files_for_stage3(paths_in)
+
+                # Only need to include the tile in prodname if it is needed to avoid
+                # filename collisions for observations which use mosaicing. Most
+                # observations just have a single tile per datset, so we can just use
+                # the standard prodname in this case.
+                keys_with_tiles = set(grouped_files.keys())
+                keys_without_tiles = set(
+                    (dither, match_key) for dither, tile, match_key in keys_with_tiles
                 )
+                include_tile_in_prodname = len(keys_with_tiles) != len(
+                    keys_without_tiles
+                )
+                
                 for (dither, tile, match_key), paths_in in grouped_files.items():
                     dirname = 'combined' if dither is None else f'd{dither}'
                     dirname = dirname + variant_dirname
@@ -845,22 +848,8 @@ class Pipeline:
 
     def group_stage2_files_for_stage3(
         self, paths_in: list[str]
-    ) -> tuple[dict[tuple[int | None, str, tuple[str | None, ...]], list[str]], bool]:
-        # Group files by (dither, tile, match_key) to go into the same ASN for stage3
-        # processing. Also group them by (dither, tile, match_key, band_key) to see
-        # if we need to include the tiles in the generated prodnames. This is needed
-        # because some files can safely be merged into the same ASN and still produce
-        # independent output files. E.g. MIRI files covering different channels/bands
-        # can be put into the same ASN file, but still produce a series of independent
-        # output files. Therefore, we only need to include the tile in the prodname if
-        # it is needed to avoid filename collisions from these band separated output
-        # files.
-        grouped_output: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]]
-        grouped: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]] = {}
-        grouped_with_band: dict[
-            tuple[int | None, str, tuple[str | None, ...], tuple[str | None, ...]],
-            list[str],
-        ] = {}
+    ) -> dict[tuple[int | None, str, tuple[str | None, ...]], list[str]]:
+        out: dict[tuple[int | None, str, tuple[str | None, ...]], list[str]] = {}
         dither_options = set()
         for p_in in paths_in:
             with fits.open(p_in) as hdul:
@@ -868,55 +857,32 @@ class Pipeline:
             dither = int(hdr['PATT_NUM'])
             dither_options.add(dither)
             tile = hdr['ACT_ID']
-            match_key, band_key = self.get_file_match_keys_for_stage3(hdr)
+            match_key = self.get_file_match_key_for_stage3(hdr)
 
             # Do both separated (dither, ...) and combined (None, ....) dithers
             for k in [
                 (dither, tile, match_key),
                 (None, tile, match_key),
             ]:
-                grouped.setdefault(k, []).append(p_in)
-                grouped_with_band.setdefault((*k, band_key), []).append(p_in)
+                out.setdefault(k, []).append(p_in)
 
-        # If there is only a single dither, we can skip dither combination
         if len(dither_options) == 1:
-            grouped = {
+            # If there is only a single dither, we can skip dither combination
+            out = {
                 (dither, tile, match_key): paths_in
-                for (dither, tile, match_key), paths_in in grouped.items()
+                for (dither, tile, match_key), paths_in in out.items()
                 if dither is not None
             }
+        return out
 
-        # Only need to include the tile in prodname if it is needed to avoid filename
-        # collisions for observations which use mosaicing. Most observations just have a
-        # single tile per datset, so we can just use the standard prodname in this case.
-        keys_with_tiles = set(grouped_with_band.keys())
-        keys_without_tiles = set(
-            (dither, match_key, band_key)
-            for dither, tile, match_key, band_key in keys_with_tiles
-        )
-        include_tile_in_prodname = len(keys_with_tiles) != len(keys_without_tiles)
-        if include_tile_in_prodname:
-            grouped_output = grouped
-        else:
-            # If we don't need to include the tile in the prodname, we can merge the
-            # matched files into the same ASN (as e.g. different MIRI bands for the same
-            # tile may have different ACT_ID values).
-            grouped_output = {}
-            for (dither, tile, match_key), paths in grouped.items():
-                grouped_output.setdefault((dither, '', match_key), []).extend(paths)
-        return grouped_output, include_tile_in_prodname
-
-    def get_file_match_keys_for_stage3(
+    def get_file_match_key_for_stage3(
         self, path: str | fits.Header
-    ) -> tuple[tuple[str | None, ...], tuple[str | None, ...]]:
+    ) -> tuple[str | None, ...]:
         """
-        Get a key used to match files for the same dither/tile.
+        Get a key used to match background and science files.
         """
-        return (
-            self.get_file_match_key(path, self.stage3_file_match_hdr_keys),
-            self.get_file_match_key(path, self.stage3_file_match_hdr_band_keys),
-        )
-
+        return self.get_file_match_key(path, self.stage3_file_match_hdr_keys)
+    
     def write_asn_for_stage3(
         self, files: list[str], asn_path: str, prodname: str, **kwargs
     ) -> str:

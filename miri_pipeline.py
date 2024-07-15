@@ -249,6 +249,7 @@ DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
     },
     'stage3': {
         'steps': {
+            'extract_1d': {'skip': True},
             'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
         }
     },
@@ -493,10 +494,6 @@ class MiriPipeline(Pipeline):
 
     @property
     def stage3_file_match_hdr_keys(self) -> tuple[str, ...]:
-        return ()
-
-    @property
-    def stage3_file_match_hdr_band_keys(self) -> tuple[str, ...]:
         return ('CHANNEL', 'BAND')
 
     @property
