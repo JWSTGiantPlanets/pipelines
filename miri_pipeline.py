@@ -668,6 +668,7 @@ class MiriPipeline(Pipeline):
         self.run_spectral_leak(spectral_leak_kwargs)
 
     def run_spectral_leak(self, kwargs: dict[str, Any]) -> None:
+        self.log('Running spectral leak step on any extracted 1D spectra')
         _, dir_in = self.step_directories['stage3']
         for root_path in self.iterate_group_root_paths():
             paths_list: list[tuple[str, str]] = []
