@@ -169,8 +169,8 @@ STEP_DESCRIPTIONS = """
 - `stage1`: Run the standard JWST reduction pipeline stage 1.
 - `stage2`: Run the standard JWST reduction pipeline stage 2 (including optional background subtraction).
 - `defringe`: Run the JWST reduction pipeline 2D residual fringe step (note `defringe_1d` is generally preferred) [optional].
-- `stage3`: Run the standard JWST reduction pipeline stage 3.
-- `defringe_1d`: Run the JWST reduction pipeline 1D residual fringe step [optional].
+- `stage3`: Run the standard JWST reduction pipeline stage 3 (including automatically running the spectral leak step on x1d spectra, if present).
+- `defringe_1d`: Apply the JWST reduction pipeline 1D residual fringe step to each spectrum in the s3d data cubes [optional].
 - `navigate`: Navigate reduced files.
 - `psf`: Correct PSF effects using a forward model convolved with telescope's PSF [optional].
 - `desaturate`: Desaturate data using cubes with fewer groups [optional].
@@ -215,6 +215,7 @@ from typing import Any, Collection
 import tqdm
 from astropy.io import fits
 from jwst.residual_fringe import ResidualFringeStep
+from jwst.spectral_leak import SpectralLeakStep
 
 import argparse_utils
 import flat_field
@@ -224,7 +225,7 @@ from parallel_tools import runmany
 from pipeline import BoolOrBoth, Pipeline, RootPath, Step, get_pipeline_argument_parser
 
 # Pipeline constants for MIRI
-STEPS = (
+STEPS: tuple[Step, ...] = (
     'remove_groups',
     'stage1',
     'stage2',
@@ -249,7 +250,6 @@ DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
     },
     'stage3': {
         'steps': {
-            'extract_1d': {'skip': True},
             'cube_build': {'output_type': 'band', 'coord_system': 'ifualign'},
         }
     },
@@ -652,6 +652,82 @@ class MiriPipeline(Pipeline):
     def defringe_1d_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         p_in, p_out, kwargs = args
         defringe_file(p_in, p_out, **kwargs)
+
+    # stage3+spectral_leak
+    def run_stage3(self, kwargs: dict[str, Any]) -> None:
+        super().run_stage3(kwargs)
+
+        # The spectral leak step needs 3A and 1B to be in the ASN, so manually run it
+        # with all wavelengths in the same ASN. Putting everything in the same ASN for
+        # the whole of stage3 can mess up the WCS info for moving targets, so we only
+        # do it for the spectral leak step.
+        try:
+            spectral_leak_kwargs = kwargs['steps']['spectral_leak']
+        except KeyError:
+            spectral_leak_kwargs = {}
+        self.run_spectral_leak(spectral_leak_kwargs)
+
+    def run_spectral_leak(self, kwargs: dict[str, Any]) -> None:
+        _, dir_in = self.step_directories['stage3']
+        for root_path in self.iterate_group_root_paths():
+            paths_list: list[tuple[str, str]] = []
+            for variant in self.data_variant_combinations:
+                paths_in = self.get_paths(
+                    root_path,
+                    dir_in,
+                    '*',
+                    '*_x1d.fits',
+                    filter_variants=True,
+                    variant_combinations={variant},
+                    do_warning=False,
+                )
+                grouped_files = self.group_x1d_files_for_spectral_leak(paths_in)
+                for (output_dir, prodname), paths_in in grouped_files.items():
+                    asn_path = self.write_asn_for_stage3(
+                        paths_in,
+                        os.path.join(output_dir, f'{prodname}_x1d_asn.json'),
+                        prodname=prodname,
+                    )
+                    paths_list.append((asn_path, output_dir))
+            args_list = [
+                (p, output_dir, kwargs) for p, output_dir in sorted(paths_list)
+            ]
+            if len(args_list) > 0:
+                runmany(
+                    self.spectral_leak_fn,
+                    args_list,
+                    desc='spectral_leak',
+                    **self.reduction_parallel_kwargs,
+                )
+
+    def spectral_leak_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
+        asn_path, output_dir, kwargs = args
+        container = SpectralLeakStep.call(asn_path, save_results=False, **kwargs)
+        for model in container:
+            # Only save the model if the spectral leak step was actually run
+            if model.meta.cal_step.spectral_leak is not None:
+                path = os.path.join(output_dir, model.meta.filename)
+                with fits.open(path) as hdul:
+                    hdr: fits.Header = hdul['PRIMARY'].header  # type: ignore
+                if hdr.get('S_SPLEAK', None) == 'COMPLETE':
+                    # Ensure that we don't double-apply the spectral leak step
+                    print(
+                        f'WARNING: {path} already has the spectral leak step applied, '
+                        'skipping manual spectral leak step'
+                    )
+                    continue
+                model.save(path)
+
+    def group_x1d_files_for_spectral_leak(
+        self, paths_in: list[str]
+    ) -> dict[tuple[str, str], list[str]]:
+        out: dict[tuple[str, str], list[str]] = {}
+        for p_in in paths_in:
+            p = pathlib.Path(p_in)
+            prodname = '_'.join(p.name.split('_')[:-2])
+            output_dir = str(p.parent)
+            out.setdefault((output_dir, prodname), []).append(p_in)
+        return out
 
     # psf
     def run_psf(self, kwargs: dict[str, Any]) -> None:

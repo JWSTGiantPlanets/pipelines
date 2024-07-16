@@ -788,7 +788,7 @@ class Pipeline:
                 include_tile_in_prodname = len(keys_with_tiles) != len(
                     keys_without_tiles
                 )
-                
+
                 for (dither, tile, match_key), paths_in in grouped_files.items():
                     dirname = 'combined' if dither is None else f'd{dither}'
                     dirname = dirname + variant_dirname
@@ -882,7 +882,7 @@ class Pipeline:
         Get a key used to match background and science files.
         """
         return self.get_file_match_key(path, self.stage3_file_match_hdr_keys)
-    
+
     def write_asn_for_stage3(
         self, files: list[str], asn_path: str, prodname: str, **kwargs
     ) -> str:
