@@ -153,6 +153,11 @@ python3 nirspec_pipeline.py /path/to/your/nirspec/data
 
 For more detailed documentation, including the various customisation options, see the instructions at the top of the [`nirspec_pipeline.py`](https://github.com/JWSTGiantPlanets/pipelines/blob/main/nirspec_pipeline.py) file or run `python3 nirspec_pipeline.py --help`.
 
+
+## Point source targets
+These pipelines were originally designed to reduce extended-source solar system targets, but are also able to reduce data for point-source targets. It is worth noting, however, that the steps run after the standard pipeline (`navigate`, `defringe_1d`, `despike`, `psf` etc.) all work with spectral cubes (`*_s3d.fits`), so may not be as useful if you are using extracted 1D spectra (`*_x1d.fits`) instead.
+
+
 ## Support
 If you have any issues running the code in this repository, please [open an issue](https://github.com/JWSTGiantPlanets/pipelines/issues/new) or contact ortk2@leicester.ac.uk.
 
