@@ -184,6 +184,9 @@ python3 nirspec_pipeline.py /data/uranus/lon1 --parallel 0.5
 # Run the full pipeline, with desaturation
 python3 nirspec_pipeline.py /data/uranus/lon1 --desaturate
 
+# Run the full pipeline, with emsm weighting when building spectral cubes
+python3 nirspec_pipeline.py /data/uranus/lon1 --cube-build-weighting=emsm
+
 # Run the pipeline, including background subtraction
 python3 nirspec_pipeline.py /data/uranus/lon1 --background-path /data/uranus/background
 

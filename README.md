@@ -120,8 +120,15 @@ python3 miri_pipeline.py /path/to/your/miri/data
 ```
 
 or if you are working from a different directory, you can use:
+
 ```bash
 python3 /path/to/pipelines/miri_pipeline.py /path/to/your/miri/data
+```
+
+The pipeline can be customised by calling with various arguments, for example:
+
+```bash
+python3 miri_pipeline.py /path/to/your/miri/data --parallel --desaturate --skip-steps despike --cube-build-weighting emsm
 ```
 
 For more detailed documentation, including the various customisation options, see the instructions at the top of the [`miri_pipeline.py`](https://github.com/ortk95/jwst-pipelines/blob/main/miri_pipeline.py) file or run `python3 miri_pipeline.py --help`.

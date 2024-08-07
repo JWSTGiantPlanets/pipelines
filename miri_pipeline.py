@@ -190,6 +190,9 @@ python3 miri_pipeline.py /data/uranus/lon1
 # Run the full pipeline, with desaturation
 python3 miri_pipeline.py /data/uranus/lon1 --desaturate
 
+# Run the full pipeline, with emsm weighting when building spectral cubes
+python3 miri_pipeline.py /data/uranus/lon1 --cube-build-weighting=emsm
+
 # Run the full pipeline, with only the defringed data
 python3 miri_pipeline.py /data/uranus/lon1 --defringe_1d
 
