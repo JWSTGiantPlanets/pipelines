@@ -1,4 +1,4 @@
-__version__ = '1.0.3'
+__version__ = '1.1.0'
 
 import datetime
 import math
@@ -265,9 +265,6 @@ def calculate_pixel_ratios(
 def do_tile(
     paths: list[str],
     path_out: str,
-    channel: str,
-    band: str,
-    fringe: str,
     dataset: str,
     *,
     lat_bin_size_factor: float = 1.25,
@@ -278,14 +275,27 @@ def do_tile(
     sigma_iterations: int = 5,
     snr_threshold: float = 10,
     max_correction: float = 1.5,
+    channel: str | None = None,  # MIRI metadata
+    band: str | None = None,
+    fringe: str | None = None,
+    filter_: str | None = None,  # NIRSpec metadata
+    grating: str | None = None,
 ):
     header = fits.Header()
     header[f'HIERARCH {HEADER_PREFIX} VERSION'] = (__version__, 'Software version')
     header[f'HIERARCH {HEADER_PREFIX} DATE'] = datetime.datetime.now().isoformat()
     header[f'HIERARCH {HEADER_PREFIX} DATASET'] = dataset
-    header[f'HIERARCH {HEADER_PREFIX} CHANNEL'] = channel
-    header[f'HIERARCH {HEADER_PREFIX} BAND'] = band
-    header[f'HIERARCH {HEADER_PREFIX} DEFRINGED'] = bool(fringe)
+
+    if channel is not None:
+        header[f'HIERARCH {HEADER_PREFIX} CHANNEL'] = channel
+    if band is not None:
+        header[f'HIERARCH {HEADER_PREFIX} BAND'] = band
+    if fringe is not None:
+        header[f'HIERARCH {HEADER_PREFIX} DEFRINGED'] = bool(fringe)
+    if filter_ is not None:
+        header[f'HIERARCH {HEADER_PREFIX} FILTER'] = filter_
+    if grating is not None:
+        header[f'HIERARCH {HEADER_PREFIX} GRATING'] = grating
 
     flat_cube = construct_flat_cube(
         paths,

@@ -107,7 +107,7 @@ def defringe_file(
         corrected_hdr.add_comment('True values were corrected, False values were not')
         hdul.append(
             fits.ImageHDU(
-                data=corrected_spaxels.astype(int),
+                data=corrected_spaxels.astype(np.uint8),
                 header=corrected_hdr,
                 name='FRINGE1D_CORRECTED',
             )
@@ -144,7 +144,7 @@ def defringe_cube(
     """
     Apply JWST pipeline 1D defringing to each spaxel of a 3D cube independently.
 
-    If a spaxel cannot be corrected (if an erorr is raised while calling the pipeline's
+    If a spaxel cannot be corrected (if an error is raised while calling the pipeline's
     `fit_residual_fringes_1d` function), it will be left unchanged. The returned
     `corrected_spaxels` array can be used to identify which spaxels were corrected.
 
