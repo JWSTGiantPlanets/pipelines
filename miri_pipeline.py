@@ -210,7 +210,7 @@ python3 miri_pipeline.py /data/uranus/lon1 --kwargs '{"stage3": {"steps": {"outl
 """
 import os
 import pathlib
-from typing import Any, Collection
+from typing import Any, Collection, Literal
 
 import tqdm
 from astropy.io import fits
@@ -305,6 +305,7 @@ def run_pipeline(
     groups_to_use: list[int] | None = None,
     background_subtract: BoolOrBoth = 'both',
     background_path: str | None = None,
+    cube_build_weighting: Literal['drizzle', 'emsm', 'msm'] | None = None,
     basic_navigation: bool = False,
     step_kwargs: dict[Step, dict[str, Any]] | None = None,
     parallel_kwargs: dict[str, Any] | None = None,
@@ -386,6 +387,14 @@ def run_pipeline(
             equivalent of `root_path` for the background observations). Note that the
             background data must be reduced to at least `stage1` for this to work as
             the *_rate.fits files are used for the background subtraction.
+        cube_build_weighting: Weighting algorithm to use when building spectral cubes.
+            This is a convenience argument to set the `weighting` parameter in the
+            `cube_build` step in the `stage3` pipeline, and is equivalent to passing
+            a value with
+            `step_kwargs={'stage3': {'steps': {'cube_build': {'weighting': ...}}}}`.
+            Possible values are 'drizzle' (the default), 'emsm', and 'msm'. See
+            https://jwst-pipeline.readthedocs.io/en/latest/jwst/cube_build/main.html#weighting
+            for more details on the different algorithms.
         basic_navigation: Toggle between basic or full navigation. If True, then only
             RA and Dec navigation backplanes are generated (e.g. useful for small
             bodies). If False (the default), then full navigation is performed,
@@ -439,6 +448,7 @@ def run_pipeline(
         groups_to_use=groups_to_use,
         background_subtract=background_subtract,
         background_path=background_path,
+        cube_build_weighting=cube_build_weighting,
         basic_navigation=basic_navigation,
         step_kwargs=step_kwargs,
         parallel_kwargs=parallel_kwargs,
