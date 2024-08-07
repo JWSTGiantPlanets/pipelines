@@ -70,6 +70,7 @@ KERNEL_NAMES = [
     'jup365.bsp',
     'sat415.bsp',
     'sat425.bsp',
+    'sat441.bsp',
     'ura115.bsp',
     'nep095.bsp',
     'jwst_rec.bsp',
