@@ -145,6 +145,10 @@ def make_summary_plot(
             reduction_notes.append('Background subtracted')
         if primary_header.get('S_RESFRI') == 'COMPLETE':
             reduction_notes.append('Residual fringe corrected (2D)')
+        try:
+            reduction_notes.append(f'Cube build weighting: {primary_header["WTYPE"]}')
+        except KeyError:
+            pass
         reduction_notes.extend(get_header_reduction_notes(hdul))
     instrument = primary_header['INSTRUME']
 
