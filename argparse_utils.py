@@ -20,7 +20,13 @@ class UnderscoreArgumentParser(argparse.ArgumentParser):
         args = list(args)
         for i, arg in enumerate(args):
             if arg.startswith('--'):
-                args[i] = '--' + arg[2:].replace('_', '-')
+                key, value = arg.split('=', 1) if '=' in arg else (arg, None)
+                key = '--' + key[2:].replace('_', '-')
+                if value is None:
+                    arg = key
+                else:
+                    arg = key + '=' + value
+                args[i] = arg
         return super().parse_args(args, namespace)
 
 
