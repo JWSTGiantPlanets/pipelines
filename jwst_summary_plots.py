@@ -182,7 +182,6 @@ def make_summary_plot(
             path_in, aberration_correction='CN', **PLANETMAPPER_KW
         )
         body.disc_from_wcs(True, False)
-
     if body is None:
         planetmapper.utils.format_radec_axes(ax, dec=np.nanmean(dec_img))
     else:
@@ -264,8 +263,8 @@ def make_summary_plot(
 
     # ax.contourf(ra_img % 360, dec_img, img, cmap=DATA_CMAP, levels=255)
     ax.pcolormesh(
-        ra_img % 360,
-        dec_img,
+        ra_img if body is None else body.get_ra_img() % 360,
+        dec_img if body is None else body.get_dec_img(),
         img,
         cmap=DATA_CMAP,
         vmin=np.nanpercentile(img, vmin_percentile),

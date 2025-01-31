@@ -137,7 +137,8 @@ To use this script you will need to:
 
     export CRDS_PATH="/data/nemesis/jwst/crds_cache"
     export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
-
+    export MPLBACKEND=Agg
+    
     # Optionally redirect the verbose stage1-3 logging to the file `pipeline.log`
     if [ -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" ]; then
         cp -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" .
