@@ -875,7 +875,7 @@ class Pipeline:
                 hdr = hdul[0].header  #  type: ignore
             dither = int(hdr['PATT_NUM'])
             dither_options.add(dither)
-            tile = hdr['ACT_ID']
+            tile = f"{hdr['OBSERVTN']}_{hdr['ACT_ID']}"
             match_key = self.get_file_match_key_for_stage3(hdr)
 
             # Do both separated (dither, ...) and combined (None, ....) dithers
