@@ -277,19 +277,19 @@ BAND_ABC_ALIASES = {'short': 'A', 'medium': 'B', 'long': 'C'}
 
 # Try to get a useful default flat data path that at least works natively on Leicester's
 # ALICE HPC
-_filename = 'ch{channel}-{band}_constructed_flat{fringe}.fits'
+DEFAULT_FLAT_FILENAME = 'ch{channel}-{band}_constructed_flat{fringe}.fits'
 _path_options = (
-    os.path.join('/data/nemesis/jwst/MIRI_IFU/flat_field', _filename),
+    os.path.join('/data/nemesis/jwst/MIRI_IFU/flat_field', DEFAULT_FLAT_FILENAME),
     os.path.join(
         os.path.dirname(__file__),
         '..',
         'jwst_data',
         'MIRI_IFU',
         'flat_field',
-        _filename,
+        DEFAULT_FLAT_FILENAME,
     ),
-    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', 'flat_field', _filename),
-    os.path.join(os.path.dirname(__file__), 'flat_field', _filename),
+    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', 'flat_field', DEFAULT_FLAT_FILENAME),
+    os.path.join(os.path.dirname(__file__), 'flat_field', DEFAULT_FLAT_FILENAME),
 )
 DEFAULT_FLAT_DATA_PATH = _path_options[-1]
 for _p in _path_options:
@@ -443,7 +443,9 @@ def run_pipeline(
         flat_data_path: Optionally specify custom path to the flat field data. This path
             should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
             be replaced by appropriate values for each channel, band and defringe
-            setting.
+            setting. If a directory is provided instead of a file, then the default
+            flat field filename `ch{channel}-{band}_constructed_flat{fringe}.fits`
+            will be appended to the path.
     """
     pipeline = MiriPipeline(
         root_path,
@@ -480,11 +482,18 @@ class MiriPipeline(Pipeline):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.flat_data_path = self.standardise_path(flat_data_path)
+        self.flat_data_path = self._make_flat_data_path(flat_data_path)
         self.defringe = defringe
         self.defringe_1d = defringe_1d
         self.correct_psf = correct_psf
 
+    def _make_flat_data_path(self, path: str) -> str:
+        """Standardise the flat data path by maybe adding a filename suffix."""
+        path = self.standardise_path(path)
+        if os.path.isdir(path):
+            path = os.path.join(path, DEFAULT_FLAT_FILENAME)
+        return path
+    
     @staticmethod
     def get_instrument() -> str:
         return 'MIRI'
@@ -857,7 +866,9 @@ def main():
         help="""Optionally specify custom path to the flat field data. This path
             should contain `{channel}`, `{band}` and `{fringe}` placeholders, which will
             be replaced by appropriate values for each channel, band and defringe
-            setting.""",
+            setting. If a directory is provided instead of a file, then the default
+            flat field filename `ch{channel}-{band}_constructed_flat{fringe}.fits`
+            will be appended to the path.""",
     )
     parser.add_argument(
         '--correct-psf',
