@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Full JWST reduction pipeline for MIRI MRS data, including the standard reduction from 
-stage0 to stage3, and custom pipeline steps for additional cleaning and data 
+Full JWST reduction pipeline for MIRI MRS data, including the standard reduction from
+stage0 to stage3, and custom pipeline steps for additional cleaning and data
 visualisation.
 
 See STEP_DESCRIPTIONS below for a description of each step in this pipeline.
@@ -19,8 +19,8 @@ https://doi.org/10.3847/2515-5172/ad045f
 
 Setup
 =====
-If you are running a reduction on Leicester's ALICE HPC then the pipeline should work 
-out of the box without any additional setup - see the example job submission script 
+If you are running a reduction on Leicester's ALICE HPC then the pipeline should work
+out of the box without any additional setup - see the example job submission script
 below. If you are running the pipeline on another machine, you will need to set up the
 correct environment to run the pipeline:
 
@@ -32,27 +32,27 @@ set to load the and cache the appropriate CRDS reference files ::
 
 If you are starting with an empty CRDS cache, the pipeline will have to download several
 GB of reference files, so the first run will be much slower. If you are getting errors
-when the reduction pipeline is reading/writing CRDS reference files, try running the 
+when the reduction pipeline is reading/writing CRDS reference files, try running the
 reduction step serially (i.e. without the `--parallel` flag) to avoid any potential race
-conditions caused by multiple processes trying to simultaneously download the same 
+conditions caused by multiple processes trying to simultaneously download the same
 reference files.
 
 The navigation and visualisation steps use SPICE kernels to calculate the observation
-geometry. The pipeline will attempt to automatically find the SPICE kernels, but this 
+geometry. The pipeline will attempt to automatically find the SPICE kernels, but this
 will generally only work if they are saved in `~/spice_kernels` or you are running the
 code on ALICE. Therefore, the location of these kernels can customised by setting the
 environment variable ::
 
     export PLANETMAPPER_KERNEL_PATH="path/to/spice_kernels"
 
-For more information on downloading and saving the SPICE kernels, see 
+For more information on downloading and saving the SPICE kernels, see
 https://planetmapper.readthedocs.io/en/latest/spice_kernels.html.
 
 
 Usage
 =====
 The pipeline can be run from the command line, or imported and run from Python. To run
-the pipeline to fully reduce a dataset, simply download the stage0 (e.g. to 
+the pipeline to fully reduce a dataset, simply download the stage0 (e.g. to
 `/data/uranus/lon1/stage0`), then run the following command on the command line ::
 
     python3 miri_pipeline.py /data/uranus/lon1
@@ -62,19 +62,19 @@ or from Python ::
     import miri_pipeline
     miri_pipeline.run_pipeline('/data/uranus/lon1')
 
-This will run the full pipeline, and output data files appropriate directories (e.g. 
+This will run the full pipeline, and output data files appropriate directories (e.g.
 `/data/uranus/lon1/stage3`, `/data/uranus/lon1/plots` etc.).
 
-By default, most steps of the pipeline are effectively run twice, each step with the 
+By default, most steps of the pipeline are effectively run twice, each step with the
 residual defringe step disabled first, then with it enabled. If you only want defringed
 or non-defringed data, you can customise this behaviour with the pipeline arguments/CLI
 flags.
 
 If the pipeline is run with desaturation enabled, the pipeline flow is:
-- Firstly, multiple versions of the stage0 cubes are created with different numbers of 
+- Firstly, multiple versions of the stage0 cubes are created with different numbers of
   groups (the `remove_groups` step).
 - `stage1` is run on e.g. the 4 group data, then the 3 group data, then the 2 group
-  data, then the 1 group data. Then `stage2` is run on the 4-1 group data, then 
+  data, then the 1 group data. Then `stage2` is run on the 4-1 group data, then
   `stage3`, then `navigate`.
 - The `desaturate` step is then run to combine the various group data into a single
   desaturated dataset.
@@ -82,8 +82,8 @@ If the pipeline is run with desaturation enabled, the pipeline flow is:
 
 Data cubes are saved at each step of the pipeline, with the data in each stage directory
 used as the input for the next stage. The `stage0`, `stage1` and `stage2` directories
-contain partially reduced data cubes. The `stage3` directory onwards contain reduced 
-data cubes which can be used for science. Within each science directory (`stage3`, 
+contain partially reduced data cubes. The `stage3` directory onwards contain reduced
+data cubes which can be used for science. Within each science directory (`stage3`,
 `stage4...` etc.), files are organised by dither and any data variant. For example:
 - `stage3/d1` contains the stage3 data for dither 1
 - `stage3/d2_bg` contains the stage3 data for dither 2 with the background subtracted
@@ -94,7 +94,7 @@ data cubes which can be used for science. Within each science directory (`stage3
 
 The `plots` and `animation` directories contain quick look visualisations of the data.
 
-Metadata about the pipeline processing steps is saved in the `PRIMARY` FITS header of 
+Metadata about the pipeline processing steps is saved in the `PRIMARY` FITS header of
 each file.
 
 For more command line examples, see CLI_EXAMPLES below, and for more Python examples,
@@ -103,9 +103,9 @@ see the docstring for `run_pipeline()` below.
 
 Customising logging
 ===================
-The the `reduction` step of the pipeline can print a large amount of information to the 
-terminal. To prevent this, you can create a `stpipe-log.cfg` file in your working 
-directory, with the following contents to redirect the output to a file named 
+The the `reduction` step of the pipeline can print a large amount of information to the
+terminal. To prevent this, you can create a `stpipe-log.cfg` file in your working
+directory, with the following contents to redirect the output to a file named
 `pipeline.log` (this `pipeline.log` file will be created automatically if needed, so you
 don't need to create it yourself) ::
 
@@ -120,17 +120,17 @@ more details.
 Example ALICE HPC job submission script
 =======================================
 The following example job submission script will run the pipeline on ALICE, using
-multiprocessing for the `reduction` step. The chmod commands at the end change the 
-permissions on data and CRDS cache files so that any new/modified files can be accessed 
+multiprocessing for the `reduction` step. The chmod commands at the end change the
+permissions on data and CRDS cache files so that any new/modified files can be accessed
 by other users in the future.
 
 The walltime and memory requirements have been tested for the giant planet observations
-(i.e. 4 dithers, ~5 groups etc.). If your data has more dithers/groups/integrations 
+(i.e. 4 dithers, ~5 groups etc.). If your data has more dithers/groups/integrations
 etc., you may need to increase the walltime and decrease the number of nodes (ppn).
 
 To use this script you will need to:
 - replace `py311` in the `source ~/miniconda...` line to your conda environemnt name
-- replace the two references to `/data/uranus/lon1` with the path to your data :: 
+- replace the two references to `/data/uranus/lon1` with the path to your data ::
 
     #!/bin/bash
     #
@@ -147,7 +147,7 @@ To use this script you will need to:
     export CRDS_PATH="/data/nemesis/jwst/crds_cache"
     export CRDS_SERVER_URL="https://jwst-crds.stsci.edu"
     export MPLBACKEND=Agg
-    
+
     # Optionally redirect the verbose stage1-3 logging to the file `pipeline.log`
     if [ -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" ]; then
         cp -f "/data/nemesis/jwst/scripts/oliver/pipelines/stpipe-log.cfg" .
@@ -165,6 +165,7 @@ To use this script you will need to:
     # Exit script with the same exit code as the pipeline
     exit $exit_code
 """
+
 STEP_DESCRIPTIONS = """
 - `remove_groups`: Remove groups from the data (for use in desaturating the data) [optional].
 - `stage1`: Run the standard JWST reduction pipeline stage 1.
@@ -245,6 +246,11 @@ STEPS: tuple[Step, ...] = (
     'animate',
 )
 DEFAULT_KWARGS: dict[Step, dict[str, Any]] = {
+    'stage1': {
+        'steps': {
+            'firstframe': {'bright_use_group1': True},
+        }
+    },
     'stage2': {
         'steps': {
             'cube_build': {'skip': True},
@@ -288,7 +294,13 @@ _path_options = (
         'flat_field',
         DEFAULT_FLAT_FILENAME,
     ),
-    os.path.join(os.path.dirname(__file__), '..', 'jwst_data', 'flat_field', DEFAULT_FLAT_FILENAME),
+    os.path.join(
+        os.path.dirname(__file__),
+        '..',
+        'jwst_data',
+        'flat_field',
+        DEFAULT_FLAT_FILENAME,
+    ),
     os.path.join(os.path.dirname(__file__), 'flat_field', DEFAULT_FLAT_FILENAME),
 )
 DEFAULT_FLAT_DATA_PATH = _path_options[-1]
@@ -307,6 +319,7 @@ def run_pipeline(
     parallel: float | bool = False,
     desaturate: bool = False,
     groups_to_use: list[int] | None = None,
+    skip_group_1_saturation_step: bool = False,
     background_subtract: BoolOrBoth = 'both',
     background_path: str | None = None,
     cube_build_weighting: Literal['drizzle', 'emsm', 'msm'] | None = None,
@@ -383,6 +396,9 @@ def run_pipeline(
             this is `None` (the default), then all available groups will be used. If
             `desaturate` is False, then this argument will be ignored. The data with all
             groups will always be included.
+        skip_group_1_saturation_step: Toggle skipping the pipeline's saturation step when
+            processing 1 group data. This will create an additional "0_groups" directory
+            which contains 1 group data with the saturation step skipped.
         background_subtract: Toggle background subtraction. If True, the backgrounds
             in the `background_path` directory will be subtracted from the data in
             `stage2`. If 'both' (the default), then versions with and without background
@@ -452,6 +468,7 @@ def run_pipeline(
         parallel=parallel,
         desaturate=desaturate,
         groups_to_use=groups_to_use,
+        skip_group_1_saturation_step=skip_group_1_saturation_step,
         background_subtract=background_subtract,
         background_path=background_path,
         cube_build_weighting=cube_build_weighting,
@@ -493,7 +510,7 @@ class MiriPipeline(Pipeline):
         if os.path.isdir(path):
             path = os.path.join(path, DEFAULT_FLAT_FILENAME)
         return path
-    
+
     @staticmethod
     def get_instrument() -> str:
         return 'MIRI'

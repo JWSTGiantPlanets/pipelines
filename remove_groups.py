@@ -1,4 +1,4 @@
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 import os
 
@@ -8,7 +8,12 @@ from astropy.io import fits
 import tools
 
 
-def remove_groups_from_file(path: str, groups_to_use: list[int] | None = None) -> None:
+def remove_groups_from_file(
+    path: str,
+    groups_to_use: list[int] | None = None,
+    *,
+    create_group_zero: bool = False,
+) -> None:
     with fits.open(path) as hdul:
         ngroups_full = hdul[0].header['NGROUPS']  #  type: ignore
         data = hdul['SCI'].data  #  type: ignore
@@ -41,3 +46,7 @@ def remove_groups_from_file(path: str, groups_to_use: list[int] | None = None) -
             )
             tools.check_path(path_out)
             hdul.writeto(path_out, overwrite=True)
+            if ngroups == 1 and create_group_zero:
+                path_out2 = os.path.join(root, 'groups', f'0_groups', stage0, filename)
+                tools.check_path(path_out2)
+                hdul.writeto(path_out2, overwrite=True)

@@ -2,10 +2,12 @@
 Script to desaturate data. See desaturate_saturn.py for an example of using this.
 """
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 import itertools
 import math
+from pathlib import Path
+from typing import Collection
 
 import numpy as np
 from astropy.io import fits
@@ -16,7 +18,7 @@ import tools
 EXPAND_WINDOW_SPECTRAL = 2
 EXPAND_WINDOW_SPATIAL = 0
 MAXIMUM_STEP = 1
-MAXIMUM_STEP_TOTAL = 5
+MAXIMUM_STEP_TOTAL = 6
 PARTIAL_SATURATION_FACTOR = 0.9
 PARTIAL_SATURATION_SNR = 300
 
@@ -26,9 +28,13 @@ OUTLIER_FACTOR_LOW_SNR1 = 1.5
 OUTLIER_THRESHOLD_LOW_SNR2 = 30
 OUTLIER_FACTOR_LOW_SNR2 = 3
 
-
-SKIP_GROUPS_MIRI_CHANNELS: dict[int, list[str]] = {
-    1: ['1', '2'],
+SKIP_GROUPS_MIRI_CHANNELS: dict[str, Collection[int]] = {
+    '1-SHORT': {1},
+    '1-MEDIUM': {1},
+    '1-LONG': {1},
+    '2-SHORT': {1},
+    # '2-MEDIUM': {1},
+    # '2-LONG': {1},
 }
 
 
@@ -50,6 +56,7 @@ def replace_saturated(
     outlier_factor_low_snr1: float = OUTLIER_FACTOR_LOW_SNR1,
     outlier_threshold_low_snr2: float = OUTLIER_THRESHOLD_LOW_SNR2,
     outlier_factor_low_snr2: float = OUTLIER_FACTOR_LOW_SNR2,
+    skip_groups_miri_channels: dict[str, Collection[int]] = SKIP_GROUPS_MIRI_CHANNELS,
     outlier_min_flux: float = 0,
     do_partial_saturation: bool = True,
     do_outlier_check: bool = True,
@@ -66,6 +73,7 @@ def replace_saturated(
     cube_arrays = {}
     dqs = []
     ngroups = []
+    saturation_skipped_groups = set()
     with fits.open(paths[0]) as hdul:
         for k in keys:
             cube_arrays[k] = [hdul[k].data]  # type: ignore
@@ -75,6 +83,13 @@ def replace_saturated(
         header = hdul['PRIMARY'].header  # type: ignore
         ngroups.append(header['NGROUPS'])
         instrument = header['INSTRUME']
+
+        if instrument == 'MIRI':
+            groups_to_skip = skip_groups_miri_channels.get(
+                f"{header['CHANNEL']}-{header['BAND']}", set()
+            )
+        else:
+            groups_to_skip = set()
 
         for p_reduced in paths[1:]:
             try:
@@ -92,10 +107,12 @@ def replace_saturated(
                         'GRATING',
                     ]:
                         assert header.get(k) == header_reduced.get(k)
-                    ng = header_reduced['NGROUPS']
-                    if instrument == 'MIRI' and header_reduced[
-                        'CHANNEL'
-                    ] in SKIP_GROUPS_MIRI_CHANNELS.get(ng, []):
+                    ng = int(header_reduced['NGROUPS'])
+                    if ng == 1 and any(
+                        p == '0_groups' for p in Path(p_reduced).parts[-6:-3]
+                    ):
+                        ng = 0
+                    if ng in groups_to_skip:
                         continue
                     ngroups.append(ng)
                     for k in keys:
@@ -103,6 +120,9 @@ def replace_saturated(
                     dq = hdul_reduced['DQ'].data  # type: ignore
                     dqs.append(dq)
                     cube_arrays[sci_key][-1][dq != 0] = np.nan
+
+                    if header_reduced.get('S_SATURA', None) == 'SKIPPED':
+                        saturation_skipped_groups.add(ng)
 
             except FileNotFoundError:
                 pass
@@ -129,12 +149,15 @@ def replace_saturated(
                     outlier_min_flux=outlier_min_flux,
                     do_partial_saturation=do_partial_saturation,
                     do_outlier_check=do_outlier_check,
+                    ngroups=ngroups,
                 )
                 indices_cube[:, idx1, idx2] = indices
                 flag_cube[:, idx1, idx2] = flags
         if maximum_step is None:
             maximum_step = math.ceil(len(ngroups) / maximum_step_total)
-        indices_cube = expand_spatial_windows(indices_cube, maximum_step=maximum_step)
+        indices_cube = expand_spatial_windows(
+            indices_cube, maximum_step=maximum_step, ngroups=ngroups
+        )
 
         cubes = {k: np.full_like(c[0], np.nan) for k, c in cube_arrays.items()}
         ngroups_cube = np.full(shape, np.nan)
@@ -153,10 +176,13 @@ def replace_saturated(
 
         header = fits.Header()
         header.add_comment('Number of groups used when desaturating')
+        header.add_comment('0 = 1 group, with saturation step skipped')
+        header.add_comment('-1 = No valid data')
         hdu = fits.ImageHDU(
-            data=np.nan_to_num(ngroups_cube).astype(np.uint8),
+            data=np.nan_to_num(ngroups_cube, nan=-1).astype(np.int8),
             header=header,
             name='NGROUPS',
+            uint=False,
         )
         hdul.append(hdu)
 
@@ -184,7 +210,7 @@ def replace_saturated(
             'Number of files used in desaturation',
         )
         if len(ngroups) >= 10:
-            groups_str = f'{ngroups[0]},{ngroups[1]},...,{ngroups[-2],ngroups[-1]}'
+            groups_str = f'{ngroups[0]},{ngroups[1]},...,{ngroups[-2]},{ngroups[-1]}'
         else:
             groups_str = ','.join(str(n) for n in ngroups)
         header['HIERARCH DESAT GROUPS'] = (
@@ -237,6 +263,18 @@ def replace_saturated(
             do_outlier_check,
             'Check for outliers (e.g. cosmic rays)',
         )
+        header['HIERARCH DESAT GROUPS_TO_SKIP'] = (
+            ','.join(str(n) for n in sorted(groups_to_skip))
+            if len(groups_to_skip) > 0
+            else 'None',
+            'Groups to skip when desaturating',
+        )
+        header['HIERARCH DESAT SATURATION_SKIPPED_GROUPS'] = (
+            ','.join(str(n) for n in sorted(saturation_skipped_groups))
+            if len(saturation_skipped_groups) > 0
+            else 'None',
+            'Skipped saturation step for these groups',
+        )
         tools.check_path(path_out)
         hdul.writeto(path_out, overwrite=True)
 
@@ -256,11 +294,14 @@ def replace_saturated_spectra(
     outlier_min_flux: float = 0,
     do_partial_saturation: bool = True,
     do_outlier_check: bool = True,
+    ngroups: list[int] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     spectra = [saturated_to_nan(s) for s in spectra]
     sp = np.full(spectra[0].shape, np.nan)
     indices = np.full(sp.shape, np.nan)
     sp_min_groups = spectra[-1]
+    if ngroups is not None and ngroups[-1] == 0:
+        sp_min_groups = spectra[-2]
     desat_flags = np.full(sp.shape, 0)
     for sp_idx, sp_reduced in enumerate(spectra):
         snr = sp_reduced / errors[sp_idx]
@@ -313,8 +354,11 @@ def replace_saturated_spectra(
 
         bad_indices = get_indices(bad_combined)
         for a, b in bad_indices:
-            a = max(a - expand_window_spectral, 0)
-            b = b + expand_window_spectral
+            expand_spectral_to_use = expand_window_spectral
+            if ngroups is not None and ngroups[sp_idx] == 0:
+                expand_spectral_to_use = 0
+            a = max(a - expand_spectral_to_use, 0)
+            b = b + expand_spectral_to_use
             if all(np.isnan(sp_reduced[a : b + 1])):
                 sp[a : b + 1] = np.nan
                 continue
@@ -327,14 +371,22 @@ def expand_spatial_windows(
     indices_cube: np.ndarray,
     expand_window_spatial: int = EXPAND_WINDOW_SPATIAL,
     maximum_step: int = MAXIMUM_STEP,
+    ngroups: list[int] | None = None,
 ) -> np.ndarray:
     nans = np.isnan(indices_cube)
     cube = indices_cube.copy()
-    cube[nans] = 0
+    cube[nans] = -1
     if expand_window_spatial:
         size = 1 + 2 * expand_window_spatial
         for idx, img in enumerate(cube):
             cube[idx] = maximum_filter(img, size=size)
+
+    if ngroups is not None and ngroups[-1] == 0:
+        zero_index = len(ngroups) - 1
+        mask = cube == zero_index
+        unexpanded = indices_cube.copy()
+        unexpanded[nans] = zero_index + 1
+        cube[mask] = np.minimum(cube[mask], unexpanded[mask])
 
     if maximum_step:
         for _ in range(int(np.max(cube))):

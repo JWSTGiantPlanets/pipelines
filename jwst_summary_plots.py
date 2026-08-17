@@ -32,7 +32,7 @@ This script can be run in python, for example: ::
         'path/to/save/plot.png',
     )
 
-This can also be run directly from the command line by specifying the input FITS and 
+This can also be run directly from the command line by specifying the input FITS and
 output image paths: ::
 
     python3 jwst_summary_plots path/to/fits/data_s3d.fits path/to/save/plot.png
@@ -49,12 +49,13 @@ generating plots in bulk.
 
 SPICE Kernels
 -------------
-If you are getting errors from SPICE, it is likely that SPICE kernels aren't being 
+If you are getting errors from SPICE, it is likely that SPICE kernels aren't being
 loaded correctly when attempting to calculate the coordinate transformations. You
 probably want to change the paths defined in PLANETMAPPER_KW below to fix this, or
-follow the instructions at 
+follow the instructions at
 https://planetmapper.readthedocs.io/en/latest/spice_kernels.html#customising-the-kernel-directory
 """
+
 import os
 import pathlib
 import sys
@@ -141,6 +142,12 @@ def make_summary_plot(
         pmap = primary_header['CRDS_CTX']
         reduction_notes.append(f'CRDS context: {pmap}')
 
+        if any(p.endswith('_groups') for p in pathlib.Path(path_in).parts[-6:-3]):
+            reduction_notes.append(
+                '{n} groups used'.format(n=primary_header.get('NGROUPS', '?'))
+            )
+        if primary_header.get('S_SATURA', None) == 'SKIPPED':
+            reduction_notes.append('Saturation step skipped')
         if primary_header.get('S_BKDSUB') == 'COMPLETE':
             reduction_notes.append('Background subtracted')
         if primary_header.get('S_RESFRI') == 'COMPLETE':
@@ -149,6 +156,14 @@ def make_summary_plot(
             reduction_notes.append(f'Cube build weighting: {primary_header["WTYPE"]}')
         except KeyError:
             pass
+        if primary_header.get('S_PXREPL') == 'COMPLETE':
+            reduction_notes.append('Pixel replacement done')
+        if 'HIERARCH DESAT SATURATION_SKIPPED_GROUPS' in primary_header:
+            skipped_groups = primary_header['HIERARCH DESAT SATURATION_SKIPPED_GROUPS']
+            if skipped_groups != 'None':
+                reduction_notes.append(
+                    f'Saturation step skipped for groups: {skipped_groups}'
+                )
         reduction_notes.extend(get_header_reduction_notes(hdul))
     instrument = primary_header['INSTRUME']
 

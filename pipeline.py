@@ -18,6 +18,7 @@ import glob
 import json
 import os
 import pathlib
+from pathlib import Path
 from typing import (
     Any,
     Collection,
@@ -113,6 +114,9 @@ class Pipeline:
             this is `None` (the default), then all available groups will be used. If
             `desaturate` is False, then this argument will be ignored. The data with all
             groups will always be included.
+        skip_group_1_saturation_step: Toggle skipping the pipeline's saturation step when
+            processing 1 group data. This will create an additional "0_groups" directory
+            which contains 1 group data with the saturation step skipped.
         background_subtract: Toggle background subtraction. If True, the backgrounds
             in the `background_path` directory will be subtracted from the data in
             `stage2`.
@@ -155,8 +159,9 @@ class Pipeline:
         root_path: str,
         *,
         parallel: float | bool = False,
-        desaturate: bool = False,
+        desaturate: bool | Literal['max'] = False,
         groups_to_use: list[int] | None | str = None,
+        skip_group_1_saturation_step: bool = False,
         background_subtract: BoolOrBoth = 'both',
         background_path: str | None = None,
         cube_build_weighting: Literal['drizzle', 'emsm', 'msm'] | None = None,
@@ -185,11 +190,26 @@ class Pipeline:
         self.reduction_parallel_kwargs = reduction_parallel_kwargs
         self.step_kwargs = step_kwargs or {}
         self.root_path = RootPath(self.standardise_path(root_path))
+
+        if desaturate == 'max':
+            desaturate = True
+            skip_group_1_saturation_step = True
+            self.step_kwargs = merge_nested_dicts(
+                self.step_kwargs,
+                {
+                    "stage3": {
+                        "steps": {"pixel_replace": {"skip": False}},
+                    }
+                },
+            )
         self.desaturate = desaturate
         self.groups_to_use = groups_to_use
-        self.background_subtract = background_subtract
+        self.background_subtract = (
+            False if background_path is None else background_subtract
+        )
         self.background_path = self.standardise_path(background_path)
         self.basic_navigation = basic_navigation
+        self.skip_group_1_saturation_step = skip_group_1_saturation_step
 
         if cube_build_weighting is not None:
             self.step_kwargs = merge_nested_dicts(
@@ -342,6 +362,11 @@ class Pipeline:
         self.log(f'Desaturate: {self.desaturate!r}', time=False)
         if self.groups_to_use:
             self.log(f'Groups to keep: {self.groups_to_use!r}', time=False)
+        if self.desaturate or self.skip_group_1_saturation_step:
+            self.log(
+                f'Skip group 1 saturation step: {self.skip_group_1_saturation_step!r}',
+                time=False,
+            )
         self.log(f'Background subtract: {self.background_subtract!r}', time=False)
         self.log(f'Background path: {self.background_path!r}', time=False)
         if self.basic_navigation:
@@ -503,7 +528,7 @@ class Pipeline:
         for idx, root_path in enumerate(group_root_paths):
             if len(group_root_paths) > 1:
                 self.log(
-                    f'Processing group directory {idx+1}/{len(group_root_paths)}: {root_path!r}'
+                    f'Processing group directory {idx + 1}/{len(group_root_paths)}: {root_path!r}'
                 )
             yield root_path
 
@@ -627,7 +652,11 @@ class Pipeline:
         paths_in = self.get_paths(self.root_path, dir_in, '*_uncal.fits')
         self.log(f'Processing {len(paths_in)} files...', time=False)
         for p in tqdm.tqdm(paths_in, desc='remove_groups'):
-            remove_groups.remove_groups_from_file(p, self.groups_to_use)
+            remove_groups.remove_groups_from_file(
+                p,
+                self.groups_to_use,
+                create_group_zero=self.skip_group_1_saturation_step,
+            )
 
     # stage1
     def run_stage1(self, kwargs: dict[str, Any]) -> None:
@@ -654,6 +683,15 @@ class Pipeline:
 
     def reduction_detector1_fn(self, args: tuple[str, str, dict[str, Any]]) -> None:
         path_in, output_dir, kwargs = args
+        if self.skip_group_1_saturation_step:
+            header = fits.getheader(path_in, extname='PRIMARY')
+            if (
+                header.get('NGROUPS', 0) == 1
+                and Path(path_in).parent.parent.name == '0_groups'
+            ):
+                kwargs = merge_nested_dicts(
+                    kwargs, {'steps': {'saturation': {'skip': True}}}
+                )
         Detector1Pipeline.call(
             path_in, output_dir=output_dir, save_results=True, **kwargs
         )
@@ -1094,13 +1132,33 @@ def get_pipeline_argument_parser(
         value is given, then all available cores will be used (i.e. `--parallel` is 
         equivalent to `--parallel 1`).""",
     )
-    parser.add_argument(
+    desaturation_group = parser.add_mutually_exclusive_group()
+    desaturation_group.add_argument(
         '--desaturate',
         action=argparse.BooleanOptionalAction,
         help="""Toggle desaturation of the data. If desaturation is enabled the 
             `reduction` step will be run for different numbers of groups, which are then
             combined in the `desaturate` step to produce a desaturated data cube. This
             desaturation is disabled by default.
+            """,
+    )
+    desaturation_group.add_argument(
+        '--max-desaturate',
+        action='store_const',
+        const='max',
+        dest='desaturate',
+        help="""Shortcut to enable desaturation with the maximum possible desaturation
+        possible. This is equivalent to passing --desaturate
+        --skip-group-1-saturation-step --kwargs
+        '{"stage3": {"steps": {"pixel_replace": {"skip": false}}}}'.
+        """,
+    )
+    parser.add_argument(
+        '--skip-group-1-saturation-step',
+        action=argparse.BooleanOptionalAction,
+        help="""Toggle skipping the pipeline's saturation step when
+            processing 1 group data. This will create an additional "0_groups" directory
+            which contains 1 group data with the saturation step skipped.
             """,
     )
     parser.add_argument(
